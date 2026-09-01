@@ -83,24 +83,24 @@ export default function LandingPage() {
       </section>
 
       <section className="poles-section">
-        <p className="eyebrow">Les 3 pôles HASHCODE</p>
+        <p className="eyebrow"><span className="eyebrow-dot" /> Les 3 pôles HASHCODE</p>
         <h2>Trois domaines.<br /><span>Une communauté.</span></h2>
         <div className="poles-grid">
-          <div className="pole-preview-card">
+          <article className="pole-preview-card">
             <Shield size={32} />
             <b>HASHCODE Security</b>
             <p>Cybersécurité, pentesting, SOC, forensics, threat intelligence</p>
-          </div>
-          <div className="pole-preview-card">
+          </article>
+          <article className="pole-preview-card">
             <Brain size={32} />
             <b>HASHCODE AI</b>
             <p>Intelligence artificielle, machine learning, deep learning, NLP</p>
-          </div>
-          <div className="pole-preview-card">
+          </article>
+          <article className="pole-preview-card">
             <Cloud size={32} />
             <b>HASHCODE Cloud</b>
             <p>Cloud computing, DevOps, architecture, infrastructure</p>
-          </div>
+          </article>
         </div>
       </section>
 

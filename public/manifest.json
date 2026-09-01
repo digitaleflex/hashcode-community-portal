@@ -1,0 +1,21 @@
+{
+  "name": "HASHCODE Community",
+  "short_name": "HASHCODE",
+  "description": "Communauté technique autour de la cybersécurité, l'IA et le cloud.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f4",
+  "theme_color": "#d94f35",
+  "lang": "fr",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["technology", "community", "education"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

@@ -168,3 +168,95 @@ button, input, select { font: inherit; } button { cursor: pointer; }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── PROFILE PAGE ─────────────── */
+.profile-dl {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px 24px;
+  margin: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 24px;
+}
+.profile-dl dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 600;
+}
+.profile-dl dd {
+  margin: 0;
+  font-size: 15px;
+}
+.pole-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pole-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.pole-row-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+.pole-row b {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+.primary-tag {
+  padding: 3px 10px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--foreground);
+}
+.info-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 32px;
+  text-align: center;
+}
+.info-card p {
+  margin: 0 0 16px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 700px) {
+  .profile-dl {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .profile-dl dt {
+    margin-top: 12px;
+  }
+  .pole-row {
+    flex-wrap: wrap;
+  }
+}

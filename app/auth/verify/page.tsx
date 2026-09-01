@@ -1,110 +1,267 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowRight, Check, LockKeyhole, Search, ShieldCheck } from 'lucide-react'
+import { ArrowRight, Check, LockKeyhole, Search, ShieldCheck, AlertCircle, X, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-type AuthMessage = 'exists' | 'new' | null
+type VerifyState = 'idle' | 'checking' | 'found' | 'not_found' | 'sending'
 
 export default function AuthVerifyEmail() {
   const [email, setEmail] = useState('')
   const [method, setMethod] = useState<'otp' | 'magic_link'>('otp')
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<AuthMessage>(null)
-  const [messageTimeout, setMessageTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const [verifyState, setVerifyState] = useState<VerifyState>('idle')
+  const [memberInfo, setMemberInfo] = useState<{ firstName: string; lastName: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // Vérifier la session existante
   useEffect(() => {
     fetch('/api/auth/session', {
       credentials: 'include'
     }).then(async (res) => {
       const data = await res.json()
       if (data.authenticated) {
-        router.push('/onboarding')
+        router.push('/profile')
       }
     })
   }, [router])
 
-  const handleSubmit = async (e: Event) => {
+  const handleCheck = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    if (!email.trim()) return
+
+    setError(null)
+    setVerifyState('checking')
+
     try {
-      const res = await fetch('/api/auth/verify-email', {
+      const res = await fetch('/api/auth/check-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, method })
+        body: JSON.stringify({ email: email.trim() })
       })
       const data = await res.json()
 
       if (res.ok) {
-        // Set message based on whether member exists
-        setMessage(data.exists ? 'exists' : 'new')
-        setMessageTimeout(
-          setTimeout(() => {
-            if (data.method === 'magic_link') {
-              router.push(`/auth/magic-link?resent=true`)
-            } else {
-              router.push('/auth/verify-otp')
-            }
-          }, 1500)
-        )
+        if (data.exists) {
+          setMemberInfo({ firstName: data.firstName, lastName: data.lastName })
+          setVerifyState('found')
+        } else {
+          setVerifyState('not_found')
+        }
       } else {
-        setMessage(null)
-        alert(data.error || 'Erreur')
+        setError(data.error || 'Erreur')
+        setVerifyState('idle')
       }
     } catch (err) {
-      setMessage(null)
-      alert('Erreur réseau')
-    } finally {
-      setLoading(false)
+      setError('Erreur réseau')
+      setVerifyState('idle')
     }
   }
 
-  // Clear timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (messageTimeout) clearTimeout(messageTimeout)
+  const handleSendCode = async () => {
+    setError(null)
+    setVerifyState('sending')
+
+    try {
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), method })
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        if (data.method === 'magic_link') {
+          router.push('/auth/magic-link')
+        } else {
+          router.push('/auth/verify-otp')
+        }
+      } else {
+        setError(data.error || 'Erreur')
+        setVerifyState('found')
+      }
+    } catch (err) {
+      setError('Erreur réseau')
+      setVerifyState('found')
     }
-  }, [messageTimeout])
+  }
 
-  // Si déjà authentifié, rediriger
-  if (method === 'otp' && loading) return null
-
-  // Translate message to user-friendly text
-  const messageText = message === 'exists'
-    ? 'Nous avons retrouvé ton profil HASHCODE. Clique ci-dessous pour continuer.'
-    : message === 'new'
-      ? 'Aucun profil historique n\'a été retrouvé. Tu peux créer ton profil HASHCODE.'
-      : null
+  const handleReset = () => {
+    setVerifyState('idle')
+    setError(null)
+    setMemberInfo(null)
+  }
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="site-header"><div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div></header>
+      <header className="site-header">
+        <div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div>
+        {verifyState !== 'idle' && (
+          <button className="text-button" onClick={handleReset}>Changer d'email</button>
+        )}
+      </header>
+
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Retrouve ton profil</p>
-          <h1>Votre engagement.<br/><em>Votre trace.</em></h1>
-          <p className="hero-text">HASHCODE crée une empreinte numérique unique pour chaque membre de notre communauté.</p>
-          {messageText && (
-            <div style={{ background: '#e0f7ff', border: '1px solid #2386c7', borderRadius: '8px', padding: '16px 20px', marginBottom: '24px', color: '#1a1a2e' }}>
-              <p style={{ margin: 0, fontSize: '14px' }}>{messageText}</p>
-            </div>
+          {verifyState === 'idle' && (
+            <>
+              <p className="eyebrow">Étape 01 / 02</p>
+              <h1>Retrouve ton<br /><em>profil HASHCODE.</em></h1>
+              <p className="hero-text">
+                Entre ton adresse email pour vérifier si tu fais déjà partie de nos 181 membres historiques.
+              </p>
+
+              {error && (
+                <div className="error-banner">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCheck}>
+                <label>Adresse email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="vous@exemple.fr"
+                  autoFocus
+                  required
+                />
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={!email.trim() || verifyState === 'checking'}
+                >
+                  {verifyState === 'checking' ? (
+                    <>Vérification...</>
+                  ) : (
+                    <>
+                      Vérifier mon profil <ArrowRight size={18} />
+                    </>
+                  )}
+                </button>
+              </form>
+
+              <p className="microcopy">
+                <Search size={14} /> Recherche sécurisée dans notre base
+              </p>
+            </>
           )}
-          <button className="primary-button" onClick={() => setMethod('magic_link')}>
-            Se connecter avec un lien magique
-            <ArrowRight size={18} />
-          </button>
-          <button className="secondary-button" style={{ marginLeft: '16px' }} onClick={() => setMethod('otp')}>
-            Se connecter par code
-          </button>
-          <p className="microcopy"><LockKeyhole size={14} /> Données sécurisées</p>
+
+          {verifyState === 'checking' && (
+            <>
+              <p className="eyebrow">Vérification en cours</p>
+              <h1>Recherche de<br /><em>ton profil...</em></h1>
+              <div className="loading-state">
+                <div className="spinner" />
+                <p>On vérifie si <strong>{email}</strong> est dans notre base de 181 membres.</p>
+              </div>
+            </>
+          )}
+
+          {verifyState === 'found' && memberInfo && (
+            <>
+              <p className="eyebrow success">✓ Profil trouvé</p>
+              <h1>Bonjour<br /><em>{memberInfo.firstName || 'membre'} !</em></h1>
+              <div className="success-banner">
+                <CheckCircle2 size={20} />
+                <div>
+                  <strong>Tu fais partie de HASHCODE</strong>
+                  <p>On a retrouvé ton profil dans nos archives. Choisis comment recevoir ton code de connexion.</p>
+                </div>
+              </div>
+
+              {error && (
+                <div className="error-banner">
+                  <AlertCircle size={18} />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="method-selector">
+                <button
+                  className={method === 'otp' ? 'method-card selected' : 'method-card'}
+                  onClick={() => setMethod('otp')}
+                  type="button"
+                >
+                  <b>Code à 6 chiffres</b>
+                  <span>Reçu par email, valable 10 minutes</span>
+                </button>
+                <button
+                  className={method === 'magic_link' ? 'method-card selected' : 'method-card'}
+                  onClick={() => setMethod('magic_link')}
+                  type="button"
+                >
+                  <b>Lien magique</b>
+                  <span>Clique directement, valable 15 minutes</span>
+                </button>
+              </div>
+
+              <button
+                className="primary-button"
+                onClick={handleSendCode}
+                disabled={verifyState === 'sending'}
+              >
+                {verifyState === 'sending' ? 'Envoi en cours...' : (
+                  <>Envoyer le {method === 'otp' ? 'code' : 'lien'} <ArrowRight size={18} /></>
+                )}
+              </button>
+            </>
+          )}
+
+          {verifyState === 'not_found' && (
+            <>
+              <p className="eyebrow">Nouveau profil</p>
+              <h1>Tu es<br /><em>nouveau ici.</em></h1>
+              <div className="info-banner">
+                <X size={20} />
+                <div>
+                  <strong>Aucun profil historique trouvé</strong>
+                  <p>L'email <strong>{email}</strong> n'est pas dans nos archives de 181 membres. Tu peux rejoindre la nouvelle communauté HASHCODE.</p>
+                </div>
+              </div>
+
+              <div className="method-selector">
+                <button
+                  className={method === 'otp' ? 'method-card selected' : 'method-card'}
+                  onClick={() => setMethod('otp')}
+                  type="button"
+                >
+                  <b>Code à 6 chiffres</b>
+                  <span>Pour créer ton profil</span>
+                </button>
+                <button
+                  className={method === 'magic_link' ? 'method-card selected' : 'method-card'}
+                  onClick={() => setMethod('magic_link')}
+                  type="button"
+                >
+                  <b>Lien magique</b>
+                  <span>Inscription en un clic</span>
+                </button>
+              </div>
+
+              <button
+                className="primary-button"
+                onClick={handleSendCode}
+                disabled={verifyState === 'sending'}
+              >
+                {verifyState === 'sending' ? 'Envoi en cours...' : (
+                  <>Créer mon profil <ArrowRight size={18} /></>
+                )}
+              </button>
+            </>
+          )}
+
+          <p className="microcopy">
+            <LockKeyhole size={14} /> Tes données restent privées et sécurisées
+          </p>
         </div>
       </section>
-      {method === 'otp' && (
-        <section className="proof-strip"><div><b>181</b><span>membres enregistrés</span></div></section>
-      )}
-      <footer className="footer"><div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div><span>© 2024 HASHCODE · La communauté qui vous ressemble.</span></footer>
+
+      <footer className="footer">
+        <div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div>
+        <span>© 2026 HASHCODE Community</span>
+      </footer>
     </main>
   )
 }

@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react'
 import { ArrowRight, Check, ChevronLeft, LockKeyhole, ShieldCheck, Cloud, Brain, Shield, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-const steps = ['Email', 'Type', 'Profil', 'Pôles', 'Niveaux', 'Intérêts', 'Préférences', 'Confirmation']
+// Steps shown in progress bar
+const allSteps = ['Email', 'Type', 'Profil', 'Pôles', 'Niveaux', 'Intérêts', 'Préférences', 'Confirmation']
 
 export default function OnboardingPage() {
+  // For existing members (imported), skip steps 0 (email) and 1 (type)
   const [step, setStep] = useState(0)
   const [email, setEmail] = useState('')
   const [memberType, setMemberType] = useState<'existing' | 'new' | null>(null)
@@ -25,6 +27,8 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [memberData, setMemberData] = useState<any>(null)
+  const [isExistingMember, setIsExistingMember] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -43,11 +47,15 @@ export default function OnboardingPage() {
       if (res.ok) {
         const data = await res.json()
         if (data.authenticated) {
-          // Pre-fill form
           const res2 = await fetch('/api/members/me', { credentials: 'include' })
           if (res2.ok) {
             const memberInfo = await res2.json()
             setMemberData(memberInfo)
+
+            // Check if this is an existing imported member
+            const existing = !!memberInfo.member
+            setIsExistingMember(existing)
+
             if (memberInfo.member) {
               setEmail(memberInfo.member.email)
               setForm((f) => ({
@@ -68,6 +76,38 @@ export default function OnboardingPage() {
                 occupation: memberInfo.profile.occupation || 'student',
               }))
             }
+
+            // Pre-fill poles from existing member data (imported poles)
+            if (memberInfo.poles && memberInfo.poles.length > 0) {
+              const existingPoles = memberInfo.poles.map((p: any) => ({
+                slug: p.pole.slug,
+                level: p.level,
+              }))
+              setSelectedPoles(existingPoles)
+            }
+
+            // Pre-fill interests from existing data
+            if (memberInfo.interests && memberInfo.interests.length > 0) {
+              setSelectedInterests(memberInfo.interests.map((i: any) => i.slug))
+            }
+
+            // Pre-fill communication prefs
+            if (memberInfo.communicationPrefs) {
+              setCommPrefs({
+                community: memberInfo.communicationPrefs.community ?? true,
+                security: memberInfo.communicationPrefs.security ?? false,
+                ai: memberInfo.communicationPrefs.ai ?? false,
+                cloud: memberInfo.communicationPrefs.cloud ?? false,
+                training: memberInfo.communicationPrefs.training ?? false,
+                workshops: memberInfo.communicationPrefs.workshops ?? false,
+                opportunities: memberInfo.communicationPrefs.opportunities ?? false,
+                projects: memberInfo.communicationPrefs.projects ?? false,
+              })
+            }
+
+            // Start at step 2 (Profil) for existing members, else step 0
+            setStep(existing ? 2 : 0)
+            setIsLoaded(true)
           }
         }
       }
@@ -76,12 +116,13 @@ export default function OnboardingPage() {
 
   const next = () => {
     setError(null)
-    setStep((s) => Math.min(s + 1, steps.length - 1))
+    setStep((s) => Math.min(s + 1, allSteps.length - 1))
   }
 
   const back = () => {
     setError(null)
-    setStep((s) => Math.max(0, s - 1))
+    const minStep = isExistingMember ? 2 : 0
+    setStep((s) => Math.max(minStep, s - 1))
   }
 
   const saveProfile = async () => {
@@ -220,6 +261,11 @@ export default function OnboardingPage() {
     next()
   }
 
+  // Adjust step display for existing members (skip Email=0, Type=1)
+  const displayStep = isExistingMember ? step - 2 : step
+  const displayTotal = allSteps.length - (isExistingMember ? 2 : 0)
+  const maxStep = allSteps.length - 1
+
   return (
     <main className="onboarding">
       <header className="site-header">
@@ -228,13 +274,16 @@ export default function OnboardingPage() {
       </header>
       <div className="onboarding-wrap">
         <div className="progress">
-          <span>0{step + 1}</span>
+          <span>0{displayStep + 1}</span>
           <div>
-            {steps.map((label, i) => (
-              <div key={label} className={i <= step ? 'progress-step active' : 'progress-step'}>
-                <i />{label}
-              </div>
-            ))}
+            {(isExistingMember ? allSteps.slice(2) : allSteps).map((label, i) => {
+              const actualIndex = isExistingMember ? i + 2 : i
+              return (
+                <div key={label} className={actualIndex <= step ? 'progress-step active' : 'progress-step'}>
+                  <i />{label}
+                </div>
+              )
+            })}
           </div>
         </div>
 
@@ -243,7 +292,14 @@ export default function OnboardingPage() {
             <div className="error-banner">{error}</div>
           )}
 
-          {step === 0 && (
+          {step === 0 && !isExistingMember && !isLoaded && (
+            <>
+              <p className="eyebrow">Chargement...</p>
+              <h1>Bienvenue.</h1>
+            </>
+          )}
+
+          {step === 0 && !isExistingMember && (
             <>
               <p className="eyebrow">Étape 01 / 08</p>
               <h1>Commençons par<br /><em>vous retrouver.</em></h1>
@@ -262,7 +318,7 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {step === 1 && (
+          {step === 1 && !isExistingMember && (
             <>
               <p className="eyebrow">Étape 02 / 08</p>
               <h1>Bienvenue dans<br /><em>le mouvement.</em></h1>
@@ -288,10 +344,10 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {step === 2 && (
+          {step === 2 && isLoaded && (
             <>
-              <p className="eyebrow">Étape 03 / 08</p>
-              <h1>Construisons votre<br /><em>profil unique.</em></h1>
+              <p className="eyebrow">{isExistingMember ? 'Étape 01 / 06' : 'Étape 03 / 08'}</p>
+              <h1>{isExistingMember ? 'Mettons à jour<br /><em>votre profil.</em>' : 'Construisons votre<br /><em>profil unique.</em>'}</h1>
               <p>Quelques informations pour mieux vous connecter aux bonnes personnes.</p>
               <div className="form-grid">
                 <div><label>Prénom</label><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
@@ -321,7 +377,7 @@ export default function OnboardingPage() {
 
           {step === 3 && (
             <>
-              <p className="eyebrow">Étape 04 / 08</p>
+              <p className="eyebrow">{isExistingMember ? 'Étape 02 / 06' : 'Étape 04 / 08'}</p>
               <h1>Sélectionnez vos <br /><em>pôles HASHCODE</em></h1>
               <p>Choisissez 1 pôle principal et jusqu'à 2 pôles secondaires. Vous pourrez les modifier plus tard.</p>
               <div className="pole-grid">
@@ -374,7 +430,7 @@ export default function OnboardingPage() {
 
           {step === 4 && (
             <>
-              <p className="eyebrow">Étape 05 / 08</p>
+              <p className="eyebrow">{isExistingMember ? 'Étape 03 / 06' : 'Étape 05 / 08'}</p>
               <h1>Indiquez votre <br /><em>niveau par pôle</em></h1>
               <p>Pour chaque pôle sélectionné, précisez votre niveau actuel.</p>
               {selectedPoles.map((pole) => (
@@ -402,7 +458,7 @@ export default function OnboardingPage() {
 
           {step === 5 && (
             <>
-              <p className="eyebrow">Étape 06 / 08</p>
+              <p className="eyebrow">{isExistingMember ? 'Étape 04 / 06' : 'Étape 06 / 08'}</p>
               <h1>Qu'aimeriez-vous <br /><em>faire avec HASHCODE ?</em></h1>
               <p>Sélectionnez tout ce qui vous intéresse.</p>
               <div className="interest-grid">
@@ -440,7 +496,7 @@ export default function OnboardingPage() {
 
           {step === 6 && (
             <>
-              <p className="eyebrow">Étape 07 / 08</p>
+              <p className="eyebrow">{isExistingMember ? 'Étape 05 / 06' : 'Étape 07 / 08'}</p>
               <h1>Que souhaitez-vous <br /><em>recevoir ?</em></h1>
               <p>Tu peux appartenir à plusieurs pôles sans recevoir toutes les communications.</p>
               <div className="comm-prefs">
@@ -463,7 +519,7 @@ export default function OnboardingPage() {
                 </div>
               </div>
               <button className="primary-button" onClick={handleNext} disabled={loading}>
-                {loading ? <><Loader2 className="spin" size={18} /> Sauvegarde...</> : <>Terminer <Check size={18} /></>}
+                {loading ? <><Loader2 className="spin" size={18} /> Sauvegarde...</> : <>{isExistingMember ? 'Terminer' : 'Terminer'} <Check size={18} /></>}
               </button>
             </>
           )}
@@ -477,7 +533,7 @@ export default function OnboardingPage() {
               <p>Bienvenue dans la nouvelle communauté HASHCODE.</p>
               <div className="member-card">
                 <div className="card-kicker">HASHCODE MEMBER</div>
-                <div className="card-name">{form.firstName || 'Membre'}</div>
+                <div className="card-name">{form.firstName || memberData?.member?.firstName || 'Membre'}</div>
                 <div className="card-pole">
                   <small>PRINCIPAL</small>
                   <b>{selectedPoles[0]?.slug === 'security' ? 'Security' : selectedPoles[0]?.slug === 'ai' ? 'AI' : 'Cloud'}</b>
@@ -498,7 +554,13 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {step > 0 && step < 7 && (
+          {!isExistingMember && step > 0 && (
+            <button className="text-button back-btn" onClick={back}>
+              <ChevronLeft size={18} /> Retour
+            </button>
+          )}
+
+          {isExistingMember && step > 2 && (
             <button className="text-button back-btn" onClick={back}>
               <ChevronLeft size={18} /> Retour
             </button>

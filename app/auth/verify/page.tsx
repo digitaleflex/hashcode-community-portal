@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react'
 import { ArrowRight, Check, LockKeyhole, Search, ShieldCheck } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
+type AuthMessage = 'exists' | 'new' | null
+
 export default function AuthVerifyEmail() {
   const [email, setEmail] = useState('')
   const [method, setMethod] = useState<'otp' | 'magic_link'>('otp')
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState<AuthMessage>(null)
+  const [messageTimeout, setMessageTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
 
   // Vérifier la session existante
@@ -34,23 +38,45 @@ export default function AuthVerifyEmail() {
       const data = await res.json()
 
       if (res.ok) {
-        if (data.method === 'magic_link') {
-          router.push(`/auth/magic-link?resent=true`)
-        } else {
-          router.push('/auth/verify-otp')
-        }
+        // Set message based on whether member exists
+        setMessage(data.exists ? 'exists' : 'new')
+        setMessageTimeout(
+          setTimeout(() => {
+            if (data.method === 'magic_link') {
+              router.push(`/auth/magic-link?resent=true`)
+            } else {
+              router.push('/auth/verify-otp')
+            }
+          }, 1500)
+        )
       } else {
+        setMessage(null)
         alert(data.error || 'Erreur')
       }
     } catch (err) {
+      setMessage(null)
       alert('Erreur réseau')
     } finally {
       setLoading(false)
     }
   }
 
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (messageTimeout) clearTimeout(messageTimeout)
+    }
+  }, [messageTimeout])
+
   // Si déjà authentifié, rediriger
   if (method === 'otp' && loading) return null
+
+  // Translate message to user-friendly text
+  const messageText = message === 'exists'
+    ? 'Nous avons retrouvé ton profil HASHCODE. Clique ci-dessous pour continuer.'
+    : message === 'new'
+      ? 'Aucun profil historique n\'a été retrouvé. Tu peux créer ton profil HASHCODE.'
+      : null
 
   return (
     <main className="min-h-screen bg-background">
@@ -60,6 +86,11 @@ export default function AuthVerifyEmail() {
           <p className="eyebrow">Retrouve ton profil</p>
           <h1>Votre engagement.<br/><em>Votre trace.</em></h1>
           <p className="hero-text">HASHCODE crée une empreinte numérique unique pour chaque membre de notre communauté.</p>
+          {messageText && (
+            <div style={{ background: '#e0f7ff', border: '1px solid #2386c7', borderRadius: '8px', padding: '16px 20px', marginBottom: '24px', color: '#1a1a2e' }}>
+              <p style={{ margin: 0, fontSize: '14px' }}>{messageText}</p>
+            </div>
+          )}
           <button className="primary-button" onClick={() => setMethod('magic_link')}>
             Se connecter avec un lien magique
             <ArrowRight size={18} />

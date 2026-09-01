@@ -4,9 +4,6 @@ import { db } from "./db";
 import { authTokens, members } from "./db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { Resend } from "resend";
-import { config } from "dotenv";
-
-config({ path: ".env.local" });
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "hashcode-community-secret-key-change-in-production"

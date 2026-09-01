@@ -1,16 +1,36 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { verifySessionToken } from '@/lib/auth';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || 'hashcode-community-secret-key-change-in-production'
+);
+const SESSION_COOKIE = 'hashcode_session';
 
 const protectedPaths = ['/onboarding', '/profile', '/admin'];
 const authPaths = ['/auth/verify', '/auth/verify-otp', '/auth/magic-link'];
 
+async function verifyToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return { memberId: payload.memberId, email: payload.email };
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const sessionToken = request.cookies.get('hashcode_session')?.value;
+
+  const publicPaths = ['/', '/auth', '/api/auth'];
+  if (publicPaths.some((p) => path.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  const sessionToken = request.cookies.get(SESSION_COOKIE)?.value;
 
   let isAuthenticated = false;
   if (sessionToken) {
-    const session = await verifySessionToken(sessionToken);
+    const session = await verifyToken(sessionToken);
     isAuthenticated = !!session;
   }
 
@@ -22,7 +42,7 @@ export async function middleware(request: NextRequest) {
 
   if (authPaths.some((p) => path.startsWith(p)) && isAuthenticated) {
     const url = request.nextUrl.clone();
-    url.pathname = '/onboarding';
+    url.pathname = '/profile';
     return NextResponse.redirect(url);
   }
 

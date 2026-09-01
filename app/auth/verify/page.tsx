@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowRight, Check, LockKeyhole, Search, ShieldCheck, AlertCircle, X, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Check, LockKeyhole, Search, AlertCircle, X, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type VerifyState = 'idle' | 'checking' | 'found' | 'not_found' | 'sending'
@@ -24,6 +24,8 @@ export default function AuthVerifyEmail() {
       }
     })
   }, [router])
+
+  const isState = (state: VerifyState): boolean => verifyState === state
 
   const handleCheck = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,14 +97,14 @@ export default function AuthVerifyEmail() {
     <main className="min-h-screen bg-background">
       <header className="site-header">
         <div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div>
-        {verifyState !== 'idle' && (
+        {isState('checking') || isState('found') || isState('not_found') ? (
           <button className="text-button" onClick={handleReset}>Changer d'email</button>
-        )}
+        ) : null}
       </header>
 
       <section className="hero">
         <div className="hero-copy">
-          {verifyState === 'idle' && (
+          {isState('idle') && (
             <>
               <p className="eyebrow">Étape 01 / 02</p>
               <h1>Retrouve ton<br /><em>profil HASHCODE.</em></h1>
@@ -130,9 +132,9 @@ export default function AuthVerifyEmail() {
                 <button
                   type="submit"
                   className="primary-button"
-                  disabled={!email.trim() || verifyState === 'checking'}
+                  disabled={!email.trim() || isState('checking')}
                 >
-                  {verifyState === 'checking' ? (
+                  {isState('checking') ? (
                     <>Vérification...</>
                   ) : (
                     <>
@@ -148,7 +150,7 @@ export default function AuthVerifyEmail() {
             </>
           )}
 
-          {verifyState === 'checking' && (
+          {isState('checking') && (
             <>
               <p className="eyebrow">Vérification en cours</p>
               <h1>Recherche de<br /><em>ton profil...</em></h1>
@@ -159,7 +161,7 @@ export default function AuthVerifyEmail() {
             </>
           )}
 
-          {verifyState === 'found' && memberInfo && (
+          {isState('found') && memberInfo && (
             <>
               <p className="eyebrow success">✓ Profil trouvé</p>
               <h1>Bonjour<br /><em>{memberInfo.firstName || 'membre'} !</em></h1>
@@ -200,16 +202,16 @@ export default function AuthVerifyEmail() {
               <button
                 className="primary-button"
                 onClick={handleSendCode}
-                disabled={verifyState === 'sending'}
+                disabled={isState('sending')}
               >
-                {verifyState === 'sending' ? 'Envoi en cours...' : (
+                {isState('sending') ? 'Envoi en cours...' : (
                   <>Envoyer le {method === 'otp' ? 'code' : 'lien'} <ArrowRight size={18} /></>
                 )}
               </button>
             </>
           )}
 
-          {verifyState === 'not_found' && (
+          {isState('not_found') && (
             <>
               <p className="eyebrow">Nouveau profil</p>
               <h1>Tu es<br /><em>nouveau ici.</em></h1>
@@ -243,9 +245,9 @@ export default function AuthVerifyEmail() {
               <button
                 className="primary-button"
                 onClick={handleSendCode}
-                disabled={verifyState === 'sending'}
+                disabled={isState('sending')}
               >
-                {verifyState === 'sending' ? 'Envoi en cours...' : (
+                {isState('sending') ? 'Envoi en cours...' : (
                   <>Créer mon profil <ArrowRight size={18} /></>
                 )}
               </button>

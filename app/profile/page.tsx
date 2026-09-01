@@ -2,7 +2,34 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ArrowRight, Loader2 } from 'lucide-react'
+import { Check, Loader2, Shield, Brain, Cloud, LogOut } from 'lucide-react'
+
+const poleIcon = (slug: string) => {
+  switch (slug) {
+    case 'security': return <Shield size={16} />
+    case 'ai': return <Brain size={16} />
+    case 'cloud': return <Cloud size={16} />
+    default: return null
+  }
+}
+
+const poleLabel = (slug: string) => {
+  switch (slug) {
+    case 'security': return 'HASHCODE Security'
+    case 'ai': return 'HASHCODE AI'
+    case 'cloud': return 'HASHCODE Cloud'
+    default: return slug
+  }
+}
+
+const levelLabel = (level: string) => {
+  switch (level) {
+    case 'beginner': return 'Débutant'
+    case 'intermediate': return 'Intermédiaire'
+    case 'advanced': return 'Avancé'
+    default: return level
+  }
+}
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -11,6 +38,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [data, setData] = useState<any>(null)
+  const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -105,6 +133,8 @@ export default function ProfilePage() {
       })
       if (res.ok) {
         setSuccess(true)
+        setEditMode(false)
+        fetchProfile()
         setTimeout(() => setSuccess(false), 3000)
       } else {
         setError('Erreur lors de la sauvegarde')
@@ -125,6 +155,11 @@ export default function ProfilePage() {
     return <main className="min-h-screen bg-background"><div style={{ textAlign: 'center', padding: '120px' }}>Chargement...</div></main>
   }
 
+  const poles = data?.poles || []
+  const interests = data?.interests || []
+  const member = data?.member
+  const profile = data?.profile
+
   return (
     <main className="min-h-screen bg-background">
       <header className="site-header">
@@ -133,55 +168,152 @@ export default function ProfilePage() {
           <span>HASHCODE</span>
         </div>
         <div className="header-actions">
-          <button className="text-button" onClick={() => router.push('/admin')}>Admin</button>
-          <button className="text-button" onClick={handleLogout}>Déconnexion</button>
+          {member?.email === 'eflexcloud@gmail.com' && (
+            <button className="text-button" onClick={() => router.push('/admin')}>Admin</button>
+          )}
+          <button className="text-button" onClick={handleLogout}><LogOut size={14} /> Déconnexion</button>
         </div>
       </header>
 
       <div className="onboarding-wrap">
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <p className="eyebrow"><span className="eyebrow-dot" /> Mon profil</p>
-          <h1 style={{ fontSize: 'clamp(40px, 5vw, 56px)', margin: '0 0 24px', letterSpacing: '-.04em' }}>
-            {data?.member?.firstName || 'Membre'}
+          <h1 style={{ fontSize: 'clamp(40px, 5vw, 56px)', margin: '0 0 8px', letterSpacing: '-.04em' }}>
+            {member?.firstName ? `${member.firstName}` : 'Bienvenue'}
           </h1>
           <p style={{ color: 'var(--muted-foreground)', marginBottom: '32px' }}>
-            {data?.member?.email}
+            {member?.email}
           </p>
 
           {error && <div className="error-banner">{error}</div>}
-          {success && <div className="success-banner">✓ Profil mis à jour</div>}
+          {success && <div className="success-banner">✓ Profil mis à jour avec succès</div>}
 
-          <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: '32px' }}>
-            <div><label>Prénom</label><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-            <div><label>Nom</label><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
-            <div><label>Âge</label><input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
-            <div><label>Pays</label><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></div>
-            <div><label>Ville</label><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
-            <div><label>Téléphone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-            <div style={{ gridColumn: '1 / -1' }}><label>LinkedIn</label><input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} /></div>
-            <div style={{ gridColumn: '1 / -1' }}><label>Bio</label><input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></div>
-          </div>
+          {/* VIEW MODE */}
+          {!editMode && (
+            <>
+              {/* Identity */}
+              <section style={{ marginBottom: '40px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h2 style={{ fontSize: '20px', margin: 0 }}>Identité</h2>
+                  <button className="text-button" onClick={() => setEditMode(true)}>Modifier</button>
+                </div>
+                <dl className="profile-dl">
+                  <dt>Prénom</dt><dd>{member?.firstName || '—'}</dd>
+                  <dt>Nom</dt><dd>{member?.lastName || '—'}</dd>
+                  <dt>Âge</dt><dd>{member?.age || '—'}</dd>
+                  <dt>Pays</dt><dd>{member?.country || '—'}</dd>
+                  <dt>Ville</dt><dd>{member?.city || '—'}</dd>
+                  <dt>Téléphone</dt><dd>{member?.phone || '—'}</dd>
+                  <dt>Statut</dt><dd><span className={`status ${member?.status === 'active' ? 'active' : 'pending'}`}>{member?.status}</span></dd>
+                </dl>
+              </section>
 
-          <h2 style={{ fontSize: '24px', marginBottom: '16px' }}>Préférences de communication</h2>
-          <div className="comm-prefs" style={{ marginBottom: '32px' }}>
-            <div className="comm-group">
-              <h3>Pôles HASHCODE</h3>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.security} onChange={(e) => setCommPrefs({ ...commPrefs, security: e.target.checked })} /> HASHCODE Security</label>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.ai} onChange={(e) => setCommPrefs({ ...commPrefs, ai: e.target.checked })} /> HASHCODE AI</label>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.cloud} onChange={(e) => setCommPrefs({ ...commPrefs, cloud: e.target.checked })} /> HASHCODE Cloud</label>
-            </div>
-            <div className="comm-group">
-              <h3>Activités</h3>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.training} onChange={(e) => setCommPrefs({ ...commPrefs, training: e.target.checked })} /> Formations</label>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.workshops} onChange={(e) => setCommPrefs({ ...commPrefs, workshops: e.target.checked })} /> Workshops</label>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.opportunities} onChange={(e) => setCommPrefs({ ...commPrefs, opportunities: e.target.checked })} /> Opportunités</label>
-              <label className="toggle"><input type="checkbox" checked={commPrefs.projects} onChange={(e) => setCommPrefs({ ...commPrefs, projects: e.target.checked })} /> Projets</label>
-            </div>
-          </div>
+              {/* Profile */}
+              {profile && (
+                <section style={{ marginBottom: '40px' }}>
+                  <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Profil</h2>
+                  <dl className="profile-dl">
+                    <dt>Occupation</dt><dd>{profile.occupation || '—'}</dd>
+                    <dt>LinkedIn</dt><dd>{profile.linkedinUrl ? <a href={profile.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Voir profil</a> : '—'}</dd>
+                    <dt>Bio</dt><dd>{profile.bio || '—'}</dd>
+                  </dl>
+                </section>
+              )}
 
-          <button className="primary-button" onClick={handleSave} disabled={saving}>
-            {saving ? <><Loader2 className="spin" size={18} /> Sauvegarde...</> : <>Sauvegarder <Check size={18} /></>}
-          </button>
+              {/* Poles */}
+              {poles.length > 0 && (
+                <section style={{ marginBottom: '40px' }}>
+                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Pôles ({poles.length})</h2>
+                  <div className="pole-list">
+                    {poles.map((p: any) => (
+                      <div key={p.id} className="pole-row">
+                        <div className="pole-row-icon">{poleIcon(p.pole.slug)}</div>
+                        <b>{poleLabel(p.pole.slug)}</b>
+                        <span className="level-tag">{levelLabel(p.level)}</span>
+                        {p.isPrimary && <span className="primary-tag">Principal</span>}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Interests */}
+              {interests.length > 0 && (
+                <section style={{ marginBottom: '40px' }}>
+                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Intérêts ({interests.length})</h2>
+                  <div className="tags">
+                    {interests.map((i: any) => (
+                      <span key={i.id} className="tag">{i.name}</span>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Communication prefs */}
+              {data?.communicationPrefs && (
+                <section style={{ marginBottom: '40px' }}>
+                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Préférences de communication</h2>
+                  <div className="tags">
+                    {Object.entries(data.communicationPrefs)
+                      .filter(([k, v]) => v === true && k !== 'id' && k !== 'memberId')
+                      .map(([k]) => <span key={k} className="tag">✓ {k}</span>)
+                    }
+                  </div>
+                </section>
+              )}
+
+              {/* Empty states */}
+              {poles.length === 0 && interests.length === 0 && (
+                <section className="info-card" style={{ marginBottom: '40px' }}>
+                  <p>Tu n'as pas encore complété ton profil.</p>
+                  <button className="primary-button" onClick={() => router.push('/onboarding')}>
+                    Compléter mon profil
+                  </button>
+                </section>
+              )}
+            </>
+          )}
+
+          {/* EDIT MODE */}
+          {editMode && (
+            <>
+              <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Modifier mon profil</h2>
+              <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: '32px' }}>
+                <div><label>Prénom</label><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
+                <div><label>Nom</label><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
+                <div><label>Âge</label><input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
+                <div><label>Pays</label><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></div>
+                <div><label>Ville</label><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
+                <div><label>Téléphone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label>LinkedIn</label><input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label>Bio</label><input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></div>
+              </div>
+
+              <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Préférences de communication</h2>
+              <div className="comm-prefs" style={{ marginBottom: '32px' }}>
+                <div className="comm-group">
+                  <h3>Pôles HASHCODE</h3>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.security} onChange={(e) => setCommPrefs({ ...commPrefs, security: e.target.checked })} /> HASHCODE Security</label>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.ai} onChange={(e) => setCommPrefs({ ...commPrefs, ai: e.target.checked })} /> HASHCODE AI</label>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.cloud} onChange={(e) => setCommPrefs({ ...commPrefs, cloud: e.target.checked })} /> HASHCODE Cloud</label>
+                </div>
+                <div className="comm-group">
+                  <h3>Activités</h3>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.training} onChange={(e) => setCommPrefs({ ...commPrefs, training: e.target.checked })} /> Formations</label>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.workshops} onChange={(e) => setCommPrefs({ ...commPrefs, workshops: e.target.checked })} /> Workshops</label>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.opportunities} onChange={(e) => setCommPrefs({ ...commPrefs, opportunities: e.target.checked })} /> Opportunités</label>
+                  <label className="toggle"><input type="checkbox" checked={commPrefs.projects} onChange={(e) => setCommPrefs({ ...commPrefs, projects: e.target.checked })} /> Projets</label>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button className="primary-button" onClick={handleSave} disabled={saving}>
+                  {saving ? <><Loader2 className="spin" size={18} /> Sauvegarde...</> : <>Sauvegarder <Check size={18} /></>}
+                </button>
+                <button className="text-button" onClick={() => { setEditMode(false); fetchProfile() }}>Annuler</button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </main>

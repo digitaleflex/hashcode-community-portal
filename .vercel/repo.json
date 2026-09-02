@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_KQ13xS7OcojuzVs3nL5VsnqJ0U6c",
+      "name": "hashcode-community-portal",
+      "directory": ".",
+      "orgId": "team_zUmSJkb71JkSxwya9eZTERnq"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Rate limiting
-    if (!rateLimit(`magic-link:${normalizedEmail}`, 3, 60000)) {
+    if (!await rateLimit(`magic-link:${normalizedEmail}`, 3, 60000)) {
       return NextResponse.json(
         { error: "Trop de demandes. Réessaie dans 1 minute." },
         { status: 429 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Users, ShieldCheck, Zap, Activity, CheckCircle, X } from 'lucide-react'
+import { Search, Users, ShieldCheck, Zap, Activity, CheckCircle, X, RotateCw } from 'lucide-react'
 
 export default function AdminDashboard() {
   const router = useRouter()
@@ -16,15 +16,40 @@ export default function AdminDashboard() {
   const [page, setPage] = useState(1)
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
 
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  const clearFilters = () => {
+    setSearch('')
+    setStatusFilter('')
+    setPoleFilter('')
+    setLevelFilter('')
+    setPage(1)
+  }
+
   useEffect(() => {
     checkAuth()
   }, [])
 
   useEffect(() => {
-    if (search || statusFilter || poleFilter || levelFilter || page) {
+    if (searchTimeout) clearTimeout(searchTimeout)
+
+    const timeout = setTimeout(() => {
+      setPage(1)
+      fetchData()
+    }, 500)
+
+    setSearchTimeout(timeout)
+
+    return () => {
+      if (searchTimeout) clearTimeout(searchTimeout)
+    }
+  }, [search])
+
+  useEffect(() => {
+    if (statusFilter || poleFilter || levelFilter || page > 1) {
       fetchData()
     }
-  }, [search, statusFilter, poleFilter, levelFilter, page])
+  }, [statusFilter, poleFilter, levelFilter, page])
 
   const checkAuth = async () => {
     try {
@@ -98,8 +123,8 @@ export default function AdminDashboard() {
         <div className="admin-heading">
           <div>
             <p className="eyebrow"><span className="eyebrow-dot" /> Vue d'ensemble</p>
-            <h1>Dashboard Admin</h1>
-            <p>Pilote la migration et l'activation des membres HASHCODE</p>
+            <h1>Tableau de bord Admin</h1>
+            <p>Gérez l'importation et l'activation des membres HASHCODE</p>
           </div>
         </div>
 
@@ -134,7 +159,7 @@ export default function AdminDashboard() {
         {/* Pole Distribution */}
         {data?.poleStats && (
           <div className="distribution-section">
-            <h2>Distribution par pôle</h2>
+            <h2>Distribution par pôles</h2>
             <div className="pole-stats">
               {data.poleStats.map((p: any) => (
                 <div key={p.slug} className="pole-stat-card">
@@ -158,33 +183,38 @@ export default function AdminDashboard() {
               <Search size={16} />
               <input
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+                onChange={(e) => { setSearch(e.target.value) }}
                 placeholder="Rechercher email, nom, pays..."
               />
+              {(search || statusFilter || poleFilter || levelFilter) && (
+                <button className="reset-filters" onClick={clearFilters} title="Effacer tous les filtres">
+                  <RotateCw size={14} />
+                </button>
+              )}
             </div>
           </div>
 
           <div className="filters-row">
             <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}>
               <option value="">Tous les statuts</option>
-              <option value="imported">Imported</option>
-              <option value="claimed">Claimed</option>
-              <option value="verified">Verified</option>
-              <option value="updated">Updated</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="imported">Importé</option>
+              <option value="claimed">Réclamé</option>
+              <option value="verified">Vérifié</option>
+              <option value="updated">À jour</option>
+              <option value="active">Actif</option>
+              <option value="inactive">Inactif</option>
             </select>
             <select value={poleFilter} onChange={(e) => { setPoleFilter(e.target.value); setPage(1) }}>
               <option value="">Tous les pôles</option>
-              <option value="security">Security</option>
-              <option value="ai">AI</option>
-              <option value="cloud">Cloud</option>
+              <option value="security">HASHCODE Sécurité</option>
+              <option value="ai">HASHCODE IA</option>
+              <option value="cloud">HASHCODE Cloud</option>
             </select>
             <select value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value); setPage(1) }}>
               <option value="">Tous les niveaux</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
+              <option value="beginner">Débutant</option>
+              <option value="intermediate">Intermédiaire</option>
+              <option value="advanced">Avancé</option>
             </select>
           </div>
 
@@ -193,7 +223,6 @@ export default function AdminDashboard() {
               <thead>
                 <tr>
                   <th>Membre</th>
-                  <th>Email</th>
                   <th>Pays</th>
                   <th>Pôles</th>
                   <th>Statut</th>
@@ -212,7 +241,6 @@ export default function AdminDashboard() {
                         <small>{m.email}</small>
                       </span>
                     </td>
-                    <td>{m.email}</td>
                     <td>{m.country || '—'}</td>
                     <td>
                       {m.poles?.map((p: any, i: number) => (
@@ -226,14 +254,14 @@ export default function AdminDashboard() {
                     </td>
                     <td>
                       <button className="text-button" onClick={() => setSelectedMember(m.id)}>
-                        Voir
+                        Voir le profil
                       </button>
                     </td>
                   </tr>
                 ))}
                 {(!data?.members || data.members.length === 0) && (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px' }}>
+                    <td colSpan={5} style={{ textAlign: 'center', padding: '40px' }}>
                       Aucun membre trouvé
                     </td>
                   </tr>
@@ -251,112 +279,6 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
-
-      {selectedMember && <MemberDetailModal id={selectedMember} onClose={() => setSelectedMember(null)} />}
     </main>
-  )
-}
-
-function MemberDetailModal({ id, onClose }: { id: string; onClose: () => void }) {
-  const [member, setMember] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`/api/admin/members/${id}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((data) => {
-        setMember(data)
-        setLoading(false)
-      })
-  }, [id])
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          <X size={20} />
-        </button>
-        {loading ? (
-          <div style={{ padding: '40px' }}>Chargement...</div>
-        ) : member ? (
-          <div className="member-detail">
-            <h2>{member.member.firstName} {member.member.lastName}</h2>
-            <p className="microcopy">{member.member.email}</p>
-
-            <div className="detail-section">
-              <h3>Identité</h3>
-              <dl>
-                <dt>Pays</dt><dd>{member.member.country || '—'}</dd>
-                <dt>Âge</dt><dd>{member.member.age || '—'}</dd>
-                <dt>Téléphone</dt><dd>{member.member.phone || '—'}</dd>
-                <dt>Statut</dt><dd>{member.member.status}</dd>
-              </dl>
-            </div>
-
-            {member.profile && (
-              <div className="detail-section">
-                <h3>Profil</h3>
-                <dl>
-                  <dt>Occupation</dt><dd>{member.profile.occupation || '—'}</dd>
-                  <dt>LinkedIn</dt><dd>{member.profile.linkedinUrl ? <a href={member.profile.linkedinUrl} target="_blank" rel="noreferrer">Voir profil</a> : '—'}</dd>
-                  <dt>Heures/semaine</dt><dd>{member.profile.timeAvailable || '—'}</dd>
-                  <dt>Travail</dt><dd>{member.profile.workPreference || '—'}</dd>
-                </dl>
-              </div>
-            )}
-
-            {member.poles?.length > 0 && (
-              <div className="detail-section">
-                <h3>Pôles ({member.poles.length})</h3>
-                {member.poles.map((p: any, i: number) => (
-                  <div key={i} className="pole-row">
-                    <b>{p.pole.name}</b>
-                    <span className="level-tag">{p.level}</span>
-                    {p.isPrimary && <span className="primary-tag">Principal</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {member.interests?.length > 0 && (
-              <div className="detail-section">
-                <h3>Intérêts ({member.interests.length})</h3>
-                <div className="tags">
-                  {member.interests.map((i: any) => (
-                    <span key={i.id} className="tag">{i.name}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {member.communicationPrefs && (
-              <div className="detail-section">
-                <h3>Préférences communication</h3>
-                <div className="tags">
-                  {Object.entries(member.communicationPrefs).filter(([k, v]) => v === true && k !== 'id' && k !== 'memberId').map(([k]) => (
-                    <span key={k} className="tag">✓ {k}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {member.history?.length > 0 && (
-              <div className="detail-section">
-                <h3>Historique</h3>
-                {member.history.map((h: any, i: number) => (
-                  <div key={i} className="history-row">
-                    <small><b>Source:</b> {h.source}</small>
-                    {h.score && <small><b>Score:</b> {h.score}</small>}
-                    {h.languages && <small><b>Langues:</b> {h.languages}</small>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ padding: '40px' }}>Membre non trouvé</div>
-        )}
-      </div>
-    </div>
   )
 }

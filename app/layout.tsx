@@ -1,6 +1,9 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
+import './premium.css'
+import './forms.css'
+import './onboarding.css'
 
 export const metadata: Metadata = {
   title: 'HASHCODE Community | Registre des membres - Security · AI · Cloud',
@@ -53,11 +56,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5f7f4' },
-    { media: '(prefers-color-scheme: dark)', color: '#17231f' },
-  ],
+  colorScheme: 'light',
 }
 
 export default function RootLayout({

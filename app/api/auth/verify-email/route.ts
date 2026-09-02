@@ -11,8 +11,26 @@ import {
   rateLimit,
 } from "@/lib/auth";
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_REGEX.test(email) && email.length <= 254;
+}
+
 export async function POST(request: Request) {
   try {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+               request.headers.get("x-real-ip") ||
+               "unknown";
+
+    // IP-based rate limit: 10 requests per minute
+    if (!await rateLimit(`verify-email-ip:${ip}`, 10, 60000)) {
+      return NextResponse.json(
+        { error: "Trop de tentatives depuis cette adresse IP" },
+        { status: 429 }
+      );
+    }
+
     const { email, method } = await request.json();
 
     if (!email || typeof email !== "string") {
@@ -21,20 +39,26 @@ export async function POST(request: Request) {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Rate limiting
-    if (!rateLimit(`verify-email:${normalizedEmail}`, 3, 60000)) {
+    if (!isValidEmail(normalizedEmail)) {
+      return NextResponse.json({ error: "Email invalide" }, { status: 400 });
+    }
+
+    // Email-based rate limit: 3 requests per 5 minutes per email
+    if (!await rateLimit(`verify-email:${normalizedEmail}`, 3, 300000)) {
       return NextResponse.json(
-        { error: "Trop de tentatives. Réessaie dans 1 minute." },
+        { error: "Trop de demandes pour cet email. Réessaie dans 5 minutes." },
         { status: 429 }
       );
     }
 
-    // Check if member exists
+    if (method !== "magic_link" && method !== "otp") {
+      return NextResponse.json({ error: "Méthode invalide" }, { status: 400 });
+    }
+
     const member = await findMemberByEmail(normalizedEmail);
 
     if (member) {
-      // Existing member - send OTP or magic link
-      const authMethod = method === "magic_link" ? "magic_link" : "otp";
+      const authMethod = method;
 
       if (authMethod === "magic_link") {
         const token = await createMagicLinkToken(member.id);
@@ -52,7 +76,6 @@ export async function POST(request: Request) {
           : "Un code à 6 chiffres a été envoyé à ton email",
       });
     } else {
-      // New member - create placeholder and send OTP
       const newMember = await db
         .insert(members)
         .values({
@@ -63,7 +86,7 @@ export async function POST(request: Request) {
 
       const memberId = newMember[0].id;
 
-      const authMethod = method === "magic_link" ? "magic_link" : "otp";
+      const authMethod = method;
 
       if (authMethod === "magic_link") {
         const token = await createMagicLinkToken(memberId);

@@ -56,6 +56,7 @@ export async function GET() {
 
     return NextResponse.json({
       member,
+      isAdmin: session.email.toLowerCase() === (process.env.ADMIN_EMAIL?.toLowerCase() || ''),
       profile: profile || null,
       poles: memberPolesList,
       interests: memberInterestsList,

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { Shield, Brain, Cloud, Loader2, Check, LogOut } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Check, Loader2, Shield, Brain, Cloud, LogOut } from 'lucide-react'
 
 const poleIcon = (slug: string) => {
   switch (slug) {
@@ -31,6 +31,20 @@ const levelLabel = (level: string) => {
   }
 }
 
+const commPrefLabel = (key: string) => {
+  switch (key) {
+    case 'community': return 'Communauté'
+    case 'security': return 'HASHCODE Security'
+    case 'ai': return 'HASHCODE AI'
+    case 'cloud': return 'HASHCODE Cloud'
+    case 'training': return 'Formations'
+    case 'workshops': return 'Workshops'
+    case 'opportunities': return 'Opportunités'
+    case 'projects': return 'Projets'
+    default: return key
+  }
+}
+
 export default function ProfilePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -50,7 +64,7 @@ export default function ProfilePage() {
     bio: '',
   })
   const [commPrefs, setCommPrefs] = useState({
-    community: true,
+    community: false,
     security: false,
     ai: false,
     cloud: false,
@@ -66,7 +80,7 @@ export default function ProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch('/api/members/me', { credentials: 'include' })
+      const res = await fetch('/api/members/me')
       if (res.status === 401) {
         router.push('/auth/verify')
         return
@@ -118,7 +132,6 @@ export default function ProfilePage() {
       const res = await fetch('/api/members/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           firstName: form.firstName || null,
           lastName: form.lastName || null,
@@ -147,18 +160,23 @@ export default function ProfilePage() {
   }
 
   const handleLogout = async () => {
-    await fetch('/api/auth/session', { method: 'DELETE', credentials: 'include' })
+    await fetch('/api/auth/session', { method: 'DELETE' })
     router.push('/')
   }
 
   if (loading) {
-    return <main className="min-h-screen bg-background"><div style={{ textAlign: 'center', padding: '120px' }}>Chargement...</div></main>
+    return (
+      <main className="min-h-screen bg-background">
+        <div style={{ textAlign: 'center', padding: '120px' }}>Chargement…</div>
+      </main>
+    )
   }
 
-  const poles = data?.poles || []
-  const interests = data?.interests || []
   const member = data?.member
   const profile = data?.profile
+  const poles = data?.poles || []
+  const interests = data?.interests || []
+  const comms = data?.communicationPrefs
 
   return (
     <main className="min-h-screen bg-background">
@@ -168,7 +186,7 @@ export default function ProfilePage() {
           <span>HASHCODE</span>
         </div>
         <div className="header-actions">
-          {member?.email === 'eflexcloud@gmail.com' && (
+          {data?.isAdmin && (
             <button className="text-button" onClick={() => router.push('/admin')}>Admin</button>
           )}
           <button className="text-button" onClick={handleLogout}><LogOut size={14} /> Déconnexion</button>
@@ -179,7 +197,7 @@ export default function ProfilePage() {
         <div style={{ maxWidth: '760px', margin: '0 auto' }}>
           <p className="eyebrow"><span className="eyebrow-dot" /> Mon profil</p>
           <h1 style={{ fontSize: 'clamp(40px, 5vw, 56px)', margin: '0 0 8px', letterSpacing: '-.04em' }}>
-            {member?.firstName ? `${member.firstName}` : 'Bienvenue'}
+            {member?.firstName ? `Bonjour, ${member.firstName}` : 'Bienvenue'}
           </h1>
           <p style={{ color: 'var(--muted-foreground)', marginBottom: '32px' }}>
             {member?.email}
@@ -188,10 +206,8 @@ export default function ProfilePage() {
           {error && <div className="error-banner">{error}</div>}
           {success && <div className="success-banner">✓ Profil mis à jour avec succès</div>}
 
-          {/* VIEW MODE */}
           {!editMode && (
             <>
-              {/* Identity */}
               <section style={{ marginBottom: '40px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <h2 style={{ fontSize: '20px', margin: 0 }}>Identité</h2>
@@ -208,7 +224,6 @@ export default function ProfilePage() {
                 </dl>
               </section>
 
-              {/* Profile */}
               {profile && (
                 <section style={{ marginBottom: '40px' }}>
                   <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Profil</h2>
@@ -220,7 +235,6 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {/* Poles */}
               {poles.length > 0 && (
                 <section style={{ marginBottom: '40px' }}>
                   <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Pôles ({poles.length})</h2>
@@ -237,7 +251,6 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {/* Interests */}
               {interests.length > 0 && (
                 <section style={{ marginBottom: '40px' }}>
                   <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Intérêts ({interests.length})</h2>
@@ -249,20 +262,18 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {/* Communication prefs */}
-              {data?.communicationPrefs && (
+              {comms && (
                 <section style={{ marginBottom: '40px' }}>
                   <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Préférences de communication</h2>
                   <div className="tags">
-                    {Object.entries(data.communicationPrefs)
-                      .filter(([k, v]) => v === true && k !== 'id' && k !== 'memberId')
-                      .map(([k]) => <span key={k} className="tag">✓ {k}</span>)
+                    {Object.entries(comms)
+                      .filter(([k, v]: [string, any]) => v === true && k !== 'id' && k !== 'memberId')
+                      .map(([k]) => <span key={k} className="tag">✓ {commPrefLabel(k)}</span>)
                     }
                   </div>
                 </section>
               )}
 
-              {/* Empty states */}
               {poles.length === 0 && interests.length === 0 && (
                 <section className="info-card" style={{ marginBottom: '40px' }}>
                   <p>Tu n'as pas encore complété ton profil.</p>
@@ -274,7 +285,6 @@ export default function ProfilePage() {
             </>
           )}
 
-          {/* EDIT MODE */}
           {editMode && (
             <>
               <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Modifier mon profil</h2>
@@ -293,22 +303,64 @@ export default function ProfilePage() {
               <div className="comm-prefs" style={{ marginBottom: '32px' }}>
                 <div className="comm-group">
                   <h3>Pôles HASHCODE</h3>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.security} onChange={(e) => setCommPrefs({ ...commPrefs, security: e.target.checked })} /> HASHCODE Security</label>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.ai} onChange={(e) => setCommPrefs({ ...commPrefs, ai: e.target.checked })} /> HASHCODE AI</label>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.cloud} onChange={(e) => setCommPrefs({ ...commPrefs, cloud: e.target.checked })} /> HASHCODE Cloud</label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.security} onChange={(e) => setCommPrefs({ ...commPrefs, security: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    HASHCODE Security
+                  </label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.ai} onChange={(e) => setCommPrefs({ ...commPrefs, ai: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    HASHCODE AI
+                  </label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.cloud} onChange={(e) => setCommPrefs({ ...commPrefs, cloud: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    HASHCODE Cloud
+                  </label>
                 </div>
                 <div className="comm-group">
                   <h3>Activités</h3>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.training} onChange={(e) => setCommPrefs({ ...commPrefs, training: e.target.checked })} /> Formations</label>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.workshops} onChange={(e) => setCommPrefs({ ...commPrefs, workshops: e.target.checked })} /> Workshops</label>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.opportunities} onChange={(e) => setCommPrefs({ ...commPrefs, opportunities: e.target.checked })} /> Opportunités</label>
-                  <label className="toggle"><input type="checkbox" checked={commPrefs.projects} onChange={(e) => setCommPrefs({ ...commPrefs, projects: e.target.checked })} /> Projets</label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.training} onChange={(e) => setCommPrefs({ ...commPrefs, training: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    Formations
+                  </label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.workshops} onChange={(e) => setCommPrefs({ ...commPrefs, workshops: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    Workshops
+                  </label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.opportunities} onChange={(e) => setCommPrefs({ ...commPrefs, opportunities: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    Opportunités
+                  </label>
+                  <label className="toggle">
+                    <label className="toggle-switch">
+                      <input type="checkbox" checked={commPrefs.projects} onChange={(e) => setCommPrefs({ ...commPrefs, projects: e.target.checked })} />
+                      <span className="toggle-slider"></span>
+                    </label>
+                    Projets
+                  </label>
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button className="primary-button" onClick={handleSave} disabled={saving}>
-                  {saving ? <><Loader2 className="spin" size={18} /> Sauvegarde...</> : <>Sauvegarder <Check size={18} /></>}
+                  {saving ? <><Loader2 className="spin" size={18} /> Sauvegarde…</> : <>Sauvegarder <Check size={18} /></>}
                 </button>
                 <button className="text-button" onClick={() => { setEditMode(false); fetchProfile() }}>Annuler</button>
               </div>

@@ -1,14 +1,19 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, LockKeyhole, ShieldCheck, Users, Zap, Cloud, Brain, Shield } from 'lucide-react'
+import { fetchCommunityStats, type CommunityStats } from '@/lib/client-stats'
 
 export default function LandingPage() {
   const router = useRouter()
+  const [stats, setStats] = useState<CommunityStats | null>(null)
 
   useEffect(() => {
     checkAuth()
+    fetchCommunityStats()
+      .then(setStats)
+      .catch(() => setStats({ total: 0, imported: 0, active: 0, verified: 0, updated: 0, countries: 0, polesCovered: 0, poleBreakdown: [] }))
   }, [])
 
   const checkAuth = async () => {
@@ -76,9 +81,9 @@ export default function LandingPage() {
       </section>
 
       <section className="proof-strip">
-        <div><b>181</b><span>membres importés</span></div>
-        <div><b>3</b><span>pôles HASHCODE</span></div>
-        <div><b>100%</b><span>de vos données protégées</span></div>
+        <div><b>{stats ? stats.imported : '—'}</b><span>membres importés</span></div>
+        <div><b>{stats?.polesCovered ?? '—'}</b><span>pôles HASHCODE</span></div>
+        <div><b>{stats ? stats.countries : '—'}</b><span>pays représentés</span></div>
         <div className="proof-pulse"><Zap size={18} /> Rejoignez le mouvement</div>
       </section>
 

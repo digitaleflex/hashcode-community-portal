@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, LockKeyhole, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react'
+import { Check, LockKeyhole, ShieldCheck, AlertCircle, Loader2, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type MagicLinkState = 'checking' | 'valid' | 'invalid' | 'expired' | 'used' | 'sent'
@@ -99,119 +99,116 @@ export default function AuthMagicLink() {
 
       <div className="onboarding">
         <div className="onboarding-wrap">
-          <div className="form-panel" style={{ textAlign: 'center', maxWidth: '480px', margin: '0 auto' }}>
+          <div className="magic-link-panel">
+            <div
+              className={`magic-link-state checking ${state === 'checking' ? 'active' : ''}`}
+            >
+              <div className="magic-icon loading">
+                <Loader2 size={32} className="animate-spin" />
+              </div>
+              <h1>Vérification<br /><em>en cours...</em></h1>
+              <p className="magic-link-text">
+                On vérifie ton lien de connexion.
+              </p>
+            </div>
 
-            {state === 'checking' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', border: '4px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                <h1>Vérification<br /><em>en cours...</em></h1>
-                <p style={{ color: 'var(--muted-foreground)' }}>
-                  On vérifie ton lien de connexion.
-                </p>
-              </>
-            )}
+            <div
+              className={`magic-link-state valid ${state === 'valid' ? 'active' : ''}`}
+            >
+              <div className="magic-icon success">
+                <Check size={32} />
+              </div>
+              <h1>Bienvenue !</h1>
+              <p className="magic-link-text">
+                Connexion réussie. Redirection vers ton profil...
+              </p>
+            </div>
 
-            {state === 'valid' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#16a34a', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Check size={32} color="white" />
-                </div>
-                <h1>Bienvenue !</h1>
-                <p style={{ color: 'var(--muted-foreground)' }}>
-                  Connexion réussie. Redirection vers ton profil...
-                </p>
-              </>
-            )}
+            <div
+              className={`magic-link-state expired ${state === 'expired' ? 'active' : ''}`}
+            >
+              <div className="magic-icon error">
+                <AlertCircle size={32} />
+              </div>
+              <h1>Lien expiré</h1>
+              <p className="magic-link-text">
+                Ce lien de connexion a expiré (valable 15 minutes).
+              </p>
+              {error && <div className="error-banner">{error}</div>}
+              <button
+                className="primary-button"
+                onClick={resendLink}
+                disabled={resending || !email}
+              >
+                {resending ? <Loader2 size={18} className="spin" /> : 'Renvoyer un lien'}
+              </button>
+            </div>
 
-            {state === 'expired' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <AlertCircle size={32} color="white" />
-                </div>
-                <h1>Lien expiré</h1>
-                <p style={{ color: 'var(--muted-foreground)', marginBottom: '24px' }}>
-                  Ce lien de connexion a expiré (valable 15 minutes).
-                </p>
-                {error && <div className="error-banner">{error}</div>}
-                <button
-                  className="primary-button"
-                  onClick={resendLink}
-                  disabled={resending || !email}
-                >
-                  {resending ? <Loader2 size={18} className="spin" /> : 'Renvoyer un lien'}
-                </button>
-              </>
-            )}
+            <div
+              className={`magic-link-state used ${state === 'used' ? 'active' : ''}`}
+            >
+              <div className="magic-icon warning">
+                <AlertCircle size={32} />
+              </div>
+              <h1>Lien déjà utilisé</h1>
+              <p className="magic-link-text">
+                Ce lien a déjà été utilisé. Demande un nouveau lien.
+              </p>
+              <button
+                className="primary-button"
+                onClick={() => router.push('/auth/verify')}
+              >
+                Retour à la connexion <ArrowRight size={18} />
+              </button>
+            </div>
 
-            {state === 'used' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#f59e0b', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <AlertCircle size={32} color="white" />
-                </div>
-                <h1>Lien déjà utilisé</h1>
-                <p style={{ color: 'var(--muted-foreground)', marginBottom: '24px' }}>
-                  Ce lien a déjà été utilisé. Demande un nouveau lien.
-                </p>
-                <button
-                  className="primary-button"
-                  onClick={() => router.push('/auth/verify')}
-                >
-                  Retour à la connexion
-                </button>
-              </>
-            )}
+            <div
+              className={`magic-link-state invalid ${state === 'invalid' ? 'active' : ''}`}
+            >
+              <div className="magic-icon error">
+                <AlertCircle size={32} />
+              </div>
+              <h1>Lien invalide</h1>
+              <p className="magic-link-text">
+                Ce lien n'est pas valide. Il a peut-être été modifié.
+              </p>
+              <button
+                className="primary-button"
+                onClick={() => router.push('/auth/verify')}
+              >
+                Retour à la connexion <ArrowRight size={18} />
+              </button>
+            </div>
 
-            {state === 'invalid' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#dc2626', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <AlertCircle size={32} color="white" />
-                </div>
-                <h1>Lien invalide</h1>
-                <p style={{ color: 'var(--muted-foreground)', marginBottom: '24px' }}>
-                  Ce lien n'est pas valide. Il a peut-être été modifié.
-                </p>
-                <button
-                  className="primary-button"
-                  onClick={() => router.push('/auth/verify')}
-                >
-                  Retour à la connexion
-                </button>
-              </>
-            )}
-
-            {state === 'sent' && (
-              <>
-                <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#1a1a2e', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <LockKeylock size={32} color="white" />
-                </div>
-                <h1>Lien envoyé !</h1>
-                <p style={{ color: 'var(--muted-foreground)', marginBottom: '8px' }}>
-                  {email
-                    ? `Un lien de connexion a été envoyé à ${email}.`
-                    : 'Un lien de connexion a été envoyé à ton email.'
-                  }
-                </p>
-                <p className="microcopy" style={{ marginBottom: '24px' }}>
-                  <ShieldCheck size={14} /> Le lien expire dans 15 minutes
-                </p>
-                <button
-                  className="secondary-button"
-                  onClick={resendLink}
-                  disabled={resending || !email}
-                >
-                  {resending ? 'Envoi...' : 'Renvoyer le lien'}
-                </button>
-                <br />
-                <button
-                  className="text-button"
-                  style={{ marginTop: '16px' }}
-                  onClick={() => router.push('/auth/verify')}
-                >
-                  Utiliser un autre email
-                </button>
-              </>
-            )}
-
+            <div
+              className={`magic-link-state sent ${state === 'sent' ? 'active' : ''}`}
+            >
+              <div className="magic-icon sent">
+                <LockKeyhole size={32} />
+              </div>
+              <h1>Lien envoyé !</h1>
+              <p className="magic-link-text">
+                {email
+                  ? `Un lien de connexion a été envoyé à ${email}.`
+                  : 'Un lien de connexion a été envoyé à ton email.'}
+              </p>
+              <p className="magic-link-hint">
+                <ShieldCheck size={14} /> Le lien expire dans 15 minutes
+              </p>
+              <button
+                className="primary-button"
+                onClick={resendLink}
+                disabled={resending || !email}
+              >
+                {resending ? 'Envoi...' : 'Renvoyer le lien'}
+              </button>
+              <button
+                className="text-button magic-link-alt"
+                onClick={() => router.push('/auth/verify')}
+              >
+                Utiliser un autre email
+              </button>
+            </div>
           </div>
         </div>
       </div>

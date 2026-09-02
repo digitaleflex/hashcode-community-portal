@@ -9,50 +9,82 @@ import {
   rateLimit,
 } from "@/lib/auth";
 
+// ── SIMPLE VALIDATION ─────────────────────────────────
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function isValidOTP(code: string): boolean {
+  return /^\d{6}$/.test(code)
+}
+
+function sanitizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
 export async function POST(request: Request) {
   try {
-    const { email, code } = await request.json();
+    // ── PARSE BODY ─────────────────────────────────────
+    const { email, code } = await request.json()
 
-    if (!email || !code || typeof email !== "string" || typeof code !== "string") {
+    if (!email || typeof email !== "string" || !code || typeof code !== "string") {
       return NextResponse.json({ error: "Email et code requis" }, { status: 400 });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const sanitizedEmail = sanitizeEmail(email)
 
-    if (!rateLimit(`verify-otp:${normalizedEmail}`, 5, 300000)) {
+    // ── VALIDATION ─────────────────────────────────────
+    if (!isValidEmail(sanitizedEmail)) {
+      return NextResponse.json({ error: "Email invalide" }, { status: 400 });
+    }
+
+    if (!isValidOTP(code)) {
+      return NextResponse.json({ error: "Le code doit être 6 chiffres" }, { status: 400 });
+    }
+
+    // ── RATE LIMITING (per email) ─────────────────────
+    if (!await rateLimit(`verify-otp:${sanitizedEmail}`, 5, 300000)) {
       return NextResponse.json(
         { error: "Trop de tentatives. Réessaie dans 5 minutes." },
         { status: 429 }
       );
     }
 
+    // ── LOOKUP MEMBER ─────────────────────────────────
     const member = await db
       .select()
       .from(members)
-      .where(eq(members.email, normalizedEmail))
+      .where(eq(members.email, sanitizedEmail))
       .limit(1);
 
     if (member.length === 0) {
-      return NextResponse.json({ error: "Email non trouvé" }, { status: 404 });
+      // Don't reveal if email exists - security best practice
+      return NextResponse.json({ error: "Code invalide ou expiré" }, { status: 400 });
     }
 
     const memberId = member[0].id;
 
+    // ── VERIFY OTP (hashed) ───────────────────────────
     const isValid = await verifyOTPToken(memberId, code);
 
     if (!isValid) {
       return NextResponse.json({ error: "Code invalide ou expiré" }, { status: 400 });
     }
 
+    // ── CREATE SESSION ───────────────────────────────
     const sessionToken = await createSessionToken(memberId, member[0].email);
     await setSessionCookie(sessionToken);
 
     return NextResponse.json({
       success: true,
-      redirect: "/onboarding",
+      redirect: "/profile",
     });
   } catch (error) {
     console.error("verify-otp error:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
 }

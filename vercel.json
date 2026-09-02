@@ -1,0 +1,5 @@
+{
+  "installCommand": "pnpm install --config.approve-builds=true",
+  "buildCommand": "pnpm build",
+  "devCommand": "pnpm dev"
+}

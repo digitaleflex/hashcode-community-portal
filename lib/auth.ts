@@ -1,51 +1,34 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { db } from "./db";
 import { authTokens, members } from "./db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { Resend } from "resend";
+import { generateOTP, generateMagicToken, hashToken } from "./crypto";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "hashcode-community-secret-key-change-in-production"
-);
+// Re-export crypto utilities for backward compatibility
+export { generateOTP, generateMagicToken, hashToken };
+
+// ── SECURITY: Validate JWT_SECRET at startup ──────────────
+if (!process.env.JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET is required. Set it in .env.local or Vercel environment variables."
+  );
+}
+if (process.env.JWT_SECRET.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters long for security.");
+}
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 const SESSION_COOKIE = "hashcode_session";
 const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 days
 
 // ── RATE LIMITING ────────────────────────────────────────
+// Uses Upstash Redis in production, in-memory fallback for development
+import { rateLimit as distributedRateLimit } from './rate-limit';
 
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-export function rateLimit(key: string, max: number = 3, windowMs: number = 60000): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (entry.count >= max) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
-}
-
-// ── TOKEN GENERATION ────────────────────────────────────
-
-export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-export function generateMagicToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 48; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+export { distributedRateLimit as rateLimit };
 
 // ── JWT SESSION ──────────────────────────────────────────
 
@@ -89,25 +72,28 @@ export async function clearSessionCookie() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
-// ── OTP FLOW ────────────────────────────────────────────
+// ── OTP FLOW (with hashed storage) ───────────────────────
 
 export async function createOTPToken(memberId: string): Promise<string> {
   const token = generateOTP();
+  const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
   await db.delete(authTokens).where(and(eq(authTokens.memberId, memberId), eq(authTokens.type, "otp")));
 
   await db.insert(authTokens).values({
-    token, // store plain OTP for now (in production, hash this)
+    token: tokenHash, // Store hashed OTP for security
     memberId,
     type: "otp",
     expiresAt,
   });
 
-  return token;
+  return token; // Return plain token to send via email
 }
 
 export async function verifyOTPToken(memberId: string, code: string): Promise<boolean> {
+  const tokenHash = hashToken(code);
+
   const tokens = await db
     .select()
     .from(authTokens)
@@ -115,7 +101,7 @@ export async function verifyOTPToken(memberId: string, code: string): Promise<bo
       and(
         eq(authTokens.memberId, memberId),
         eq(authTokens.type, "otp"),
-        eq(authTokens.token, code),
+        eq(authTokens.token, tokenHash),
         eq(authTokens.used, false),
         gt(authTokens.expiresAt, new Date())
       )
@@ -131,16 +117,17 @@ export async function verifyOTPToken(memberId: string, code: string): Promise<bo
   return true;
 }
 
-// ── MAGIC LINK FLOW ─────────────────────────────────────
+// ── MAGIC LINK FLOW (with hashed storage) ────────────────
 
 export async function createMagicLinkToken(memberId: string): Promise<string> {
   const token = generateMagicToken();
+  const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
   await db.delete(authTokens).where(and(eq(authTokens.memberId, memberId), eq(authTokens.type, "magic_link")));
 
   await db.insert(authTokens).values({
-    token,
+    token: tokenHash,
     memberId,
     type: "magic_link",
     expiresAt,
@@ -150,12 +137,14 @@ export async function createMagicLinkToken(memberId: string): Promise<string> {
 }
 
 export async function verifyMagicLinkToken(token: string): Promise<string | null> {
+  const tokenHash = hashToken(token);
+
   const tokens = await db
     .select()
     .from(authTokens)
     .where(
       and(
-        eq(authTokens.token, token),
+        eq(authTokens.token, tokenHash),
         eq(authTokens.type, "magic_link"),
         eq(authTokens.used, false),
         gt(authTokens.expiresAt, new Date())
@@ -172,11 +161,17 @@ export async function verifyMagicLinkToken(token: string): Promise<string | null
   return tokens[0].memberId;
 }
 
-// ── EMAIL SENDING ───────────────────────────────────────
+// ── EMAIL SENDING ────────────────────────────────────────
 
+if (!process.env.RESEND_API_KEY) {
+  console.warn("RESEND_API_KEY is not set. Email sending will fail.");
+}
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 async function sendEmail(to: string, subject: string, html: string) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY not configured");
+  }
   await resend.emails.send({
     from: `${process.env.RESEND_FROM_NAME} <${process.env.RESEND_FROM_EMAIL}>`,
     to,
@@ -235,4 +230,98 @@ export async function findMemberByEmail(email: string) {
   const normalized = email.trim().toLowerCase();
   const results = await db.select().from(members).where(eq(members.email, normalized));
   return results.length > 0 ? results[0] : null;
+}
+
+// ── ADMIN CHECK ───────────────────────────────────────────
+
+export async function requireAdmin() {
+  const session = await getSession();
+  if (!session) return { session: null, error: NextResponse.json({ error: 'Non authentifié' }, { status: 401 }) };
+
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+  const isAdmin = adminEmail && session.email.toLowerCase() === adminEmail;
+
+  if (!isAdmin) {
+    return { session, error: NextResponse.json({ error: 'Accès admin requis' }, { status: 403 }) };
+  }
+
+  return { session, error: null };
+}
+
+// ── MEMBER CRUD ───────────────────────────────────────────
+
+export async function createMember(data: any) {
+  const {
+    email,
+    firstName,
+    lastName,
+    age,
+    phone,
+    city,
+    country,
+    status = 'imported',
+  } = data;
+
+  if (!email || typeof email !== 'string') {
+    throw new Error('Email requis');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw new Error('Email invalide');
+  }
+
+  const existing = await findMemberByEmail(normalizedEmail);
+  if (existing) {
+    throw new Error('Email déjà utilisé');
+  }
+
+  const [member] = await db
+    .insert(members)
+    .values({
+      email: normalizedEmail,
+      firstName,
+      lastName,
+      age,
+      phone,
+      city,
+      country,
+      status,
+    })
+    .returning();
+
+  return member;
+}
+
+export async function updateMember(memberId: string, data: any) {
+  const allowedFields = ['firstName', 'lastName', 'age', 'country', 'city', 'phone', 'status'] as const;
+
+  const updates: any = {};
+  for (const field of allowedFields) {
+    if (data[field] !== undefined) updates[field] = data[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new Error('Aucun champ à mettre à jour');
+  }
+
+  updates.updatedAt = new Date();
+
+  const [member] = await db
+    .update(members)
+    .set(updates)
+    .where(eq(members.id, memberId))
+    .returning();
+
+  return member;
+}
+
+export async function deleteMember(memberId: string) {
+  const [member] = await db
+    .delete(members)
+    .where(eq(members.id, memberId))
+    .returning({ id: members.id });
+
+  return member;
 }

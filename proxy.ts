@@ -18,7 +18,7 @@ async function verifyToken(token: string) {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   const publicPaths = ['/', '/auth', '/api/auth'];
@@ -50,5 +50,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/onboarding/:path*', '/profile/:path*', '/admin/:path*', '/auth/:path*'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

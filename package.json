@@ -2,6 +2,12 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.0.0"
+    }
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,11 +15,15 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx lib/seed.ts"
+    "db:seed": "tsx lib/seed.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@neondatabase/serverless": "^1.1.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.3",
     "@vercel/analytics": "1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -39,6 +49,7 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "typescript": "5.7.3",
+    "vitest": "^4.1.11",
     "xlsx": "^0.18.5"
   }
 }

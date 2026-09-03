@@ -10,11 +10,7 @@ import * as xlsx from 'xlsx';
 import { rateLimit } from '@/lib/rate-limit';
 import { validateOptionalEnum, MEMBER_STATUSES } from '@/lib/server-validation';
 
-function getClientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
-}
+import { getClientIp } from '@/lib/request';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([

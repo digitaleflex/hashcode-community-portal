@@ -6,11 +6,7 @@ import { eq, count, sql, and, gte, lt } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 
-function getClientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
-}
+import { getClientIp } from '@/lib/request';
 
 export async function GET(request: Request) {
   const { session, error, isAdmin } = await requireAdmin();

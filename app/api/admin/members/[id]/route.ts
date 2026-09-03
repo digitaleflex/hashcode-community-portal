@@ -24,11 +24,7 @@ import {
 } from '@/lib/server-validation';
 import { rateLimit } from '@/lib/rate-limit';
 
-function getClientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
-    'unknown';
-}
+import { getClientIp } from '@/lib/request';
 
 export async function GET(
   request: Request,

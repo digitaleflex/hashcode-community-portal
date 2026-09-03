@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { requireAdmin } from "@/lib/auth";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function GET() {
   const { error } = await requireAdmin();
   if (error) return error;
@@ -18,7 +16,7 @@ export async function GET() {
       return NextResponse.json({ error: "ADMIN_EMAIL not set" }, { status: 500 });
     }
 
-    const { data, error: sendError } = await resend.emails.send({
+    const { data, error: sendError } = await new Resend(process.env.RESEND_API_KEY).emails.send({
       from: `${process.env.RESEND_FROM_NAME} <${process.env.RESEND_FROM_EMAIL}>`,
       to: adminEmail,
       subject: "[TEST] HASHCODE - Email de test",

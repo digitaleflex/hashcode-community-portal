@@ -21,8 +21,8 @@ export function resendMock() {
     Resend: vi.fn().mockImplementation(() => ({ emails })),
     // ── Call inspection helpers ─────────────────────────────
     sendMock,
-    getLastEmail: () => sendMock.mock.calls[sentMock.mock.calls.length - 1]?.[0] ?? null,
-    getAllEmails: () => sendMock.mock.calls.map((c: [unknown]) => c[0]),
+    getLastEmail: () => sendMock.mock.calls[sendMock.mock.calls.length - 1]?.[0] ?? null,
+    getAllEmails: () => sendMock.mock.calls.map((c: any[]) => c[0]),
     resetAll: () => sendMock.mockReset(),
   };
 }

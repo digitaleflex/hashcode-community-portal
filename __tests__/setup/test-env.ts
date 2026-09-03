@@ -3,7 +3,7 @@
 // NEVER commit real secrets here — use placeholders only.
 
 process.env.JWT_SECRET = 'test-jwt-secret-must-be-at-least-32-chars-long-xxxxx';
-process.env.NODE_ENV = 'test';
+Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', writable: true });
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.UPSTASH_REDIS_REST_URL = 'https://test.upstash.io';
 process.env.UPSTASH_REDIS_REST_TOKEN = 'test-upstash-token';

@@ -11,6 +11,8 @@ import {
   X,
   ArrowLeft,
   AlertCircle,
+  Sparkles,
+  Shield,
 } from 'lucide-react'
 import { getInitials } from '@/lib/display'
 

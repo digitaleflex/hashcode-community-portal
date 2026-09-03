@@ -14,27 +14,14 @@ export function redisMock() {
       incr: vi.fn().mockResolvedValue(1),
       expire: vi.fn().mockResolvedValue(1),
     })),
-    Ratelimit: vi.fn().mockImplementation(() => ({
-      limit: vi.fn().mockResolvedValue({
+    Ratelimit: vi.fn().mockImplementation((config: { limiter?: string }) => ({
+      limit: vi.fn().mockImplementation(async () => ({
         success: true,
-        limit: 10,
+        limit: config.limiter ? 10 : 5,
         remaining: 9,
         reset: Date.now() + 60_000,
         pending: Promise.resolve(),
-      }),
-    })),
-    // ── Preset responses ────────────────────────────────────
-    Ratelimit: vi.fn().mockImplementation((config: { limiter: string }) => ({
-      limit: vi.fn().mockImplementation(async () => {
-        // Simulate sliding window success for most calls
-        return {
-          success: true,
-          limit: config.limiter ? 10 : 5,
-          remaining: 9,
-          reset: Date.now() + 60_000,
-          pending: Promise.resolve(),
-        };
-      }),
+      })),
     })),
   };
 }

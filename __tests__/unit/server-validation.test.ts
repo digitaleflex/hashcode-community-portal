@@ -9,7 +9,7 @@ import {
   validatePoles,
   validateInterestNames,
   slugifyName,
-} from '../lib/server-validation';
+} from '../../lib/server-validation';
 
 describe('Server validation', () => {
   describe('validateEmail', () => {

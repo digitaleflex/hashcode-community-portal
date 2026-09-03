@@ -110,6 +110,24 @@ export const genderLabel = (gender: string) => {
   }
 }
 
+export const PrivacyBadge = ({ level }: { level: 'public' | 'private' }) => (
+  <span
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
+      padding: '2px 8px',
+      borderRadius: 9999,
+      fontSize: 12,
+      fontWeight: 500,
+      background: level === 'public' ? '#dcfce7' : '#fee2e2',
+      color: level === 'public' ? '#166534' : '#991b1b',
+    }}
+  >
+    {level === 'public' ? '🌐 Public' : '🔒 Privé'}
+  </span>
+)
+
 export const genderColor = (gender: string) => {
   switch (gender) {
     case 'male': return '#3b82f6'

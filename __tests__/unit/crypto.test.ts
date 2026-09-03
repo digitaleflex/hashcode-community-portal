@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateOTP, generateMagicToken, hashToken } from '../lib/crypto';
+import { generateOTP, generateMagicToken, hashToken } from '../../lib/crypto';
 
 describe('Auth Utilities', () => {
   describe('generateOTP', () => {

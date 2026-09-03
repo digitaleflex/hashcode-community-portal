@@ -192,134 +192,135 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Membre non trouvé" }, { status: 404 });
     }
 
-    // ── MEMBER BASICS ────────────────────────────────────
+    // ── ATOMIC UPDATE (wraps all writes in a single transaction) ───
     // Completing onboarding (selecting poles) activates the profile.
     if (polesData && polesData.length > 0 && ["imported", "claimed", "verified"].includes(current.status)) {
       memberUpdates.status = "active";
     }
 
-    if (Object.keys(memberUpdates).length > 0) {
-      memberUpdates.updatedAt = new Date();
-      await db.update(members).set(memberUpdates).where(eq(members.id, session.memberId));
-    }
-
-    // ── PROFILE (upsert) ─────────────────────────────────
-    if (Object.keys(profileUpdates).length > 0) {
-      const [existing] = await db
-        .select({ id: memberProfiles.id })
-        .from(memberProfiles)
-        .where(eq(memberProfiles.memberId, session.memberId))
-        .limit(1);
-
-      if (existing) {
-        await db
-          .update(memberProfiles)
-          .set(profileUpdates)
-          .where(eq(memberProfiles.memberId, session.memberId));
-      } else {
-        await db.insert(memberProfiles).values({
-          memberId: session.memberId,
-          ...profileUpdates,
-        });
+    await db.transaction(async (tx) => {
+      // ── MEMBER BASICS ────────────────────────────────────
+      if (Object.keys(memberUpdates).length > 0) {
+        memberUpdates.updatedAt = new Date();
+        await tx.update(members).set(memberUpdates).where(eq(members.id, session.memberId));
       }
-    }
 
-    // ── POLES (replace) ──────────────────────────────────
-    if (polesData !== null) {
-      await db.delete(memberPoles).where(eq(memberPoles.memberId, session.memberId));
-
-      if (polesData.length > 0) {
-        const poleRows = await db
-          .select({ id: poles.id, slug: poles.slug })
-          .from(poles)
-          .where(inArray(poles.slug, polesData.map((p) => p.slug)));
-
-        const poleIdBySlug = new Map(poleRows.map((p) => [p.slug, p.id]));
-
-        const values = polesData
-          .filter((p) => poleIdBySlug.has(p.slug))
-          .map((p) => ({
-            memberId: session.memberId,
-            poleId: poleIdBySlug.get(p.slug)!,
-            level: p.level,
-            isPrimary: p.isPrimary,
-          }));
-
-        if (values.length > 0) {
-          await db.insert(memberPoles).values(values);
-        }
-      }
-    }
-
-    // ── INTERESTS (replace) ──────────────────────────────
-    // Interests are matched by slug OR display name; unknown ones are
-    // created on the fly so the wizard's taxonomy keeps working.
-    if (interestNames !== null) {
-      await db.delete(memberInterests).where(eq(memberInterests.memberId, session.memberId));
-
-      const insertedInterestIds: string[] = [];
-
-      for (const name of interestNames) {
-        const slug = slugifyName(name);
-        let [interest] = await db
-          .select({ id: interests.id })
-          .from(interests)
-          .where(or(eq(interests.slug, slug), ilike(interests.name, name)))
+      // ── PROFILE (upsert) ─────────────────────────────────
+      if (Object.keys(profileUpdates).length > 0) {
+        const [existing] = await tx
+          .select({ id: memberProfiles.id })
+          .from(memberProfiles)
+          .where(eq(memberProfiles.memberId, session.memberId))
           .limit(1);
 
-        if (!interest) {
-          const created = await db
-            .insert(interests)
-            .values({ slug, name })
-            .onConflictDoNothing()
-            .returning({ id: interests.id });
-          if (created.length > 0) {
-            interest = created[0];
-          } else {
-            const [existing] = await db
-              .select({ id: interests.id })
-              .from(interests)
-              .where(eq(interests.slug, slug))
-              .limit(1);
-            interest = existing;
+        if (existing) {
+          await tx
+            .update(memberProfiles)
+            .set(profileUpdates)
+            .where(eq(memberProfiles.memberId, session.memberId));
+        } else {
+          await tx.insert(memberProfiles).values({
+            memberId: session.memberId,
+            ...profileUpdates,
+          });
+        }
+      }
+
+      // ── POLES (replace) ──────────────────────────────────
+      if (polesData !== null) {
+        await tx.delete(memberPoles).where(eq(memberPoles.memberId, session.memberId));
+
+        if (polesData.length > 0) {
+          const poleRows = await tx
+            .select({ id: poles.id, slug: poles.slug })
+            .from(poles)
+            .where(inArray(poles.slug, polesData.map((p) => p.slug)));
+
+          const poleIdBySlug = new Map(poleRows.map((p) => [p.slug, p.id]));
+
+          const values = polesData
+            .filter((p) => poleIdBySlug.has(p.slug))
+            .map((p) => ({
+              memberId: session.memberId,
+              poleId: poleIdBySlug.get(p.slug)!,
+              level: p.level,
+              isPrimary: p.isPrimary,
+            }));
+
+          if (values.length > 0) {
+            await tx.insert(memberPoles).values(values);
+          }
+        }
+      }
+
+      // ── INTERESTS (replace) ──────────────────────────────
+      if (interestNames !== null) {
+        await tx.delete(memberInterests).where(eq(memberInterests.memberId, session.memberId));
+
+        const insertedInterestIds: string[] = [];
+
+        for (const name of interestNames) {
+          const slug = slugifyName(name);
+          let [interest] = await tx
+            .select({ id: interests.id })
+            .from(interests)
+            .where(or(eq(interests.slug, slug), ilike(interests.name, name)))
+            .limit(1);
+
+          if (!interest) {
+            const created = await tx
+              .insert(interests)
+              .values({ slug, name })
+              .onConflictDoNothing()
+              .returning({ id: interests.id });
+            if (created.length > 0) {
+              interest = created[0];
+            } else {
+              const [existing] = await tx
+                .select({ id: interests.id })
+                .from(interests)
+                .where(eq(interests.slug, slug))
+                .limit(1);
+              interest = existing;
+            }
+          }
+
+          if (interest && !insertedInterestIds.includes(interest.id)) {
+            insertedInterestIds.push(interest.id);
           }
         }
 
-        if (interest && !insertedInterestIds.includes(interest.id)) {
-          insertedInterestIds.push(interest.id);
+        if (insertedInterestIds.length > 0) {
+          await tx.insert(memberInterests).values(
+            insertedInterestIds.map((interestId) => ({
+              memberId: session.memberId,
+              interestId,
+            }))
+          );
         }
       }
 
-      if (insertedInterestIds.length > 0) {
-        await db.insert(memberInterests).values(
-          insertedInterestIds.map((interestId) => ({
+      // ── COMMUNICATION PREFS (upsert, whitelisted keys only) ──
+      if (commPrefs !== null) {
+        const [existing] = await tx
+          .select({ id: communicationPreferences.id })
+          .from(communicationPreferences)
+          .where(eq(communicationPreferences.memberId, session.memberId))
+          .limit(1);
+
+        if (existing) {
+          await tx
+            .update(communicationPreferences)
+            .set(commPrefs)
+            .where(eq(communicationPreferences.memberId, session.memberId));
+        } else {
+          await tx.insert(communicationPreferences).values({
             memberId: session.memberId,
-            interestId,
-          }))
-        );
+            ...commPrefs,
+          });
+        }
       }
-    }
-
-    // ── COMMUNICATION PREFS (upsert, whitelisted keys only) ──
-    if (commPrefs !== null) {
-      const [existing] = await db
-        .select({ id: communicationPreferences.id })
-        .from(communicationPreferences)
-        .where(eq(communicationPreferences.memberId, session.memberId))
-        .limit(1);
-
-      if (existing) {
-        await db
-          .update(communicationPreferences)
-          .set(commPrefs)
-          .where(eq(communicationPreferences.memberId, session.memberId));
-      } else {
-        await db.insert(communicationPreferences).values({
-          memberId: session.memberId,
-          ...commPrefs,
-        });
-      }
-    }
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

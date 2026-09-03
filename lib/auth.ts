@@ -6,6 +6,7 @@ import { authTokens, members } from "./db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { Resend } from "resend";
 import { generateOTP, generateMagicToken, hashToken } from "./crypto";
+import { CreateMemberSchema, UpdateMemberSchema } from "./types";
 
 // Re-export crypto utilities for backward compatibility
 export { generateOTP, generateMagicToken, hashToken };
@@ -23,6 +24,11 @@ if (process.env.JWT_SECRET.length < 32) {
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 const SESSION_COOKIE = "hashcode_session";
 const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 days
+
+// Export JWT secret getter for middleware (Edge runtime)
+export function getJwtSecret() {
+  return JWT_SECRET;
+}
 
 // ── RATE LIMITING ────────────────────────────────────────
 // Uses Upstash Redis in production, in-memory fallback for development
@@ -94,9 +100,11 @@ export async function createOTPToken(memberId: string): Promise<string> {
 export async function verifyOTPToken(memberId: string, code: string): Promise<boolean> {
   const tokenHash = hashToken(code);
 
-  const tokens = await db
-    .select()
-    .from(authTokens)
+  // Single atomic UPDATE so two concurrent requests can never consume
+  // the same one-time code (mark-used + check happen in one statement).
+  const consumed = await db
+    .update(authTokens)
+    .set({ used: true })
     .where(
       and(
         eq(authTokens.memberId, memberId),
@@ -105,16 +113,10 @@ export async function verifyOTPToken(memberId: string, code: string): Promise<bo
         eq(authTokens.used, false),
         gt(authTokens.expiresAt, new Date())
       )
-    );
+    )
+    .returning({ id: authTokens.id });
 
-  if (tokens.length === 0) return false;
-
-  await db
-    .update(authTokens)
-    .set({ used: true })
-    .where(eq(authTokens.id, tokens[0].id));
-
-  return true;
+  return consumed.length > 0;
 }
 
 // ── MAGIC LINK FLOW (with hashed storage) ────────────────
@@ -136,29 +138,38 @@ export async function createMagicLinkToken(memberId: string): Promise<string> {
   return token;
 }
 
-export async function verifyMagicLinkToken(token: string): Promise<string | null> {
+export type MagicLinkResult =
+  | { ok: true; memberId: string }
+  | { ok: false; reason: "invalid" | "expired" | "used" };
+
+export async function verifyMagicLinkToken(token: string): Promise<MagicLinkResult> {
   const tokenHash = hashToken(token);
 
-  const tokens = await db
-    .select()
+  const rows = await db
+    .select({
+      id: authTokens.id,
+      memberId: authTokens.memberId,
+      used: authTokens.used,
+      expiresAt: authTokens.expiresAt,
+    })
     .from(authTokens)
-    .where(
-      and(
-        eq(authTokens.token, tokenHash),
-        eq(authTokens.type, "magic_link"),
-        eq(authTokens.used, false),
-        gt(authTokens.expiresAt, new Date())
-      )
-    );
+    .where(and(eq(authTokens.token, tokenHash), eq(authTokens.type, "magic_link")))
+    .limit(1);
 
-  if (tokens.length === 0) return null;
+  if (rows.length === 0) return { ok: false, reason: "invalid" };
+  const row = rows[0];
+  if (row.used) return { ok: false, reason: "used" };
+  if (row.expiresAt.getTime() <= Date.now()) return { ok: false, reason: "expired" };
 
-  await db
+  // Atomic mark-used: the WHERE used = false guard makes consumption race-safe.
+  const consumed = await db
     .update(authTokens)
     .set({ used: true })
-    .where(eq(authTokens.id, tokens[0].id));
+    .where(and(eq(authTokens.id, row.id), eq(authTokens.used, false)))
+    .returning({ id: authTokens.id });
 
-  return tokens[0].memberId;
+  if (consumed.length === 0) return { ok: false, reason: "used" };
+  return { ok: true, memberId: row.memberId };
 }
 
 // ── EMAIL SENDING ────────────────────────────────────────
@@ -234,23 +245,60 @@ export async function findMemberByEmail(email: string) {
 
 // ── ADMIN CHECK ───────────────────────────────────────────
 
-export async function requireAdmin() {
+export async function requireAdmin(): Promise<{
+  error: NextResponse | null;
+  session: { memberId: string; email: string } | null;
+  isAdmin: boolean;
+}> {
   const session = await getSession();
-  if (!session) return { session: null, error: NextResponse.json({ error: 'Non authentifié' }, { status: 401 }) };
-
-  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-  const isAdmin = adminEmail && session.email.toLowerCase() === adminEmail;
-
-  if (!isAdmin) {
-    return { session, error: NextResponse.json({ error: 'Accès admin requis' }, { status: 403 }) };
+  if (!session) {
+    return {
+      session: null,
+      error: NextResponse.json({ error: 'Non authentifié' }, { status: 401 }),
+      isAdmin: false,
+    };
   }
 
-  return { session, error: null };
+  // First check if session.memberId exists
+  if (!session.memberId) {
+    return {
+      session,
+      error: NextResponse.json({ error: 'Session invalide' }, { status: 401 }),
+      isAdmin: false,
+    };
+  }
+
+  // Check DB for role
+  const member = await db
+    .select({ role: members.role })
+    .from(members)
+    .where(eq(members.id, session.memberId))
+    .limit(1);
+
+  if (member.length > 0 && member[0].role === 'admin') {
+    return { session, error: null, isAdmin: true };
+  }
+
+  // Bootstrap admin for initial setup using env var
+  const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+  const isBootstrapAdmin = adminEmail && session.email.toLowerCase() === adminEmail;
+
+  if (isBootstrapAdmin) {
+    return { session, error: null, isAdmin: true };
+  }
+
+  return {
+    session,
+    error: NextResponse.json({ error: 'Accès admin requis' }, { status: 403 }),
+    isAdmin: false,
+  };
 }
 
 // ── MEMBER CRUD ───────────────────────────────────────────
 
-export async function createMember(data: any) {
+export async function createMember(data: unknown) {
+  const parsed = CreateMemberSchema.safeParse(data);
+  if (!parsed.success) throw new Error('Invalid member data');
   const {
     email,
     firstName,
@@ -260,17 +308,9 @@ export async function createMember(data: any) {
     city,
     country,
     status = 'imported',
-  } = data;
-
-  if (!email || typeof email !== 'string') {
-    throw new Error('Email requis');
-  }
+  } = parsed.data;
 
   const normalizedEmail = email.trim().toLowerCase();
-
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    throw new Error('Email invalide');
-  }
 
   const existing = await findMemberByEmail(normalizedEmail);
   if (existing) {
@@ -294,12 +334,15 @@ export async function createMember(data: any) {
   return member;
 }
 
-export async function updateMember(memberId: string, data: any) {
-  const allowedFields = ['firstName', 'lastName', 'age', 'country', 'city', 'phone', 'status'] as const;
+export async function updateMember(memberId: string, data: unknown) {
+  const parsed = UpdateMemberSchema.safeParse(data);
+  if (!parsed.success) throw new Error('Invalid update data');
 
-  const updates: any = {};
+  const allowedFields = ['firstName', 'lastName', 'age', 'gender', 'country', 'city', 'phone', 'status'] as const;
+
+  const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
-    if (data[field] !== undefined) updates[field] = data[field];
+    if (parsed.data[field] !== undefined) updates[field] = parsed.data[field];
   }
 
   if (Object.keys(updates).length === 0) {

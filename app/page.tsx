@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, LockKeyhole, ShieldCheck, Users, Zap, Cloud, Brain, Shield } from 'lucide-react'
 import { fetchCommunityStats, type CommunityStats } from '@/lib/client-stats'
+import { Hero, HeroVisual } from '@/components/Hero'
 
 export default function LandingPage() {
   const router = useRouter()
@@ -39,52 +40,46 @@ export default function LandingPage() {
         </div>
         <div className="header-actions">
           <button className="text-button" onClick={() => router.push('/auth/verify')}>Connexion</button>
-          <span className="secure-label"><LockKeyhole size={14} /> Données sécurisées</span>
+          <span className="secure-label"><LockKeyhole size={14} /> Chiffré & privé</span>
         </div>
       </header>
 
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow"><span className="eyebrow-dot" /> Registre communautaire nouvelle génération</p>
-          <h1>HASHCODE<br /><em>revient.</em></h1>
-          <p className="hero-text">
+      <Hero
+        eyebrow="Registre communautaire nouvelle génération"
+        title={
+          <>
+            HASHCODE<br />
+            <em>revient.</em>
+          </>
+        }
+        description={
+          <>
             Depuis 2019, des milliers de personnes ont fait partie de notre communauté.<br />
             Aujourd'hui, nous reconstruisons HASHCODE autour d'une nouvelle génération de membres, de compétences et d'opportunités.
-          </p>
-          <p className="hero-text">
-            Ton profil existe peut-être déjà dans nos archives.<br />
-            <strong>Vérifie-le, mets-le à jour et retrouve ta place dans la communauté.</strong>
-          </p>
-          <button className="primary-button" onClick={() => router.push('/auth/verify')}>
-            Vérifier mon profil <ArrowRight size={18} />
-          </button>
-          <div style={{ marginTop: '16px' }}>
-            <button className="secondary-button" onClick={() => router.push('/auth/verify')}>
-              Déjà membre ? Vérifie ton profil
-            </button>
-          </div>
-          <p className="microcopy"><ShieldCheck size={14} /> Tes informations restent privées</p>
-        </div>
-        <div className="hero-visual">
-          <div className="code-orbit">
-            <div className="orbit-line orbit-one" />
-            <div className="orbit-line orbit-two" />
-            <div className="code-card">
-              <span className="code-kicker">IDENTITÉ HASHCODE</span>
-              <strong>HC–26–XXXX–XX</strong>
-              <span className="code-status"><span /> Vérifié · Membre actif</span>
-            </div>
-          </div>
-          <div className="visual-note note-top">Chaque parcours<br /><b>compte.</b></div>
-          <div className="visual-note note-bottom">Chaque voix<br /><b>est unique.</b></div>
-        </div>
-      </section>
+          </>
+        }
+        highlight="Ton profil existe peut-être déjà dans nos archives."
+        cta={{
+          label: 'Vérifier mon profil',
+          onClick: () => router.push('/auth/verify'),
+        }}
+        microcopy="Tes informations restent privées · Chiffrement AES-256"
+        microcopyIcon={<ShieldCheck size={14} />}
+        visual={
+          <HeroVisual
+            notes={{
+              top: 'Chaque parcours<br /><b>compte.</b>',
+              bottom: 'Chaque voix<br /><b>est unique.</b>',
+            }}
+          />
+        }
+      />
 
       <section className="proof-strip">
-        <div><b>{stats ? stats.imported : '—'}</b><span>membres importés</span></div>
+        <div><b>{stats ? stats.imported : '—'}</b><span>membres actifs</span></div>
         <div><b>{stats?.polesCovered ?? '—'}</b><span>pôles HASHCODE</span></div>
         <div><b>{stats ? stats.countries : '—'}</b><span>pays représentés</span></div>
-        <div className="proof-pulse"><Zap size={18} /> Rejoignez le mouvement</div>
+        <div className="proof-pulse"><Zap size={18} /> Rejoins le mouvement</div>
       </section>
 
       <section className="poles-section">

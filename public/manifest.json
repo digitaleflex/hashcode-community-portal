@@ -1,0 +1,10 @@
+{
+  "name": "HASHCODE Community",
+  "short_name": "HASHCODE",
+  "description": "Registre des membres de la communauté HASHCODE — Security, AI, Cloud",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a2e",
+  "icons": []
+}

@@ -4,6 +4,7 @@ import './globals.css'
 import './premium.css'
 import './forms.css'
 import './onboarding.css'
+import { ToastContainer } from '@/components/Toast'
 
 export const metadata: Metadata = {
   title: 'HASHCODE Community | Registre des membres - Security · AI · Cloud',
@@ -18,12 +19,12 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'HASHCODE Community | Registre des membres',
-    description: 'HASHCODE revient. Depuis 2019, des milliers de personnes ont fait partie de notre communauté. Vérifiez votre profil, mettez-le à jour et retrouvez votre place.',
+    description: 'HASHCODE revient. Depuis 2019, des milliers de personnes ont fait partie de notre communauté. Vérifiez votre profil, mettez-le à jour et retrouvez votre place dans la nouvelle communauté.',
     url: 'https://community.joinhashcode.com',
     siteName: 'HASHCODE Community',
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image',
         width: 1200,
         height: 630,
         alt: 'HASHCODE Community - Registre des membres',
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'HASHCODE Community | Registre des membres',
     description: 'HASHCODE revient. Vérifiez votre profil et retrouvez votre place dans la nouvelle communauté.',
-    images: ['/og-image.png'],
+    images: ['/og-image'],
     creator: '@hashcode',
   },
   robots: {
@@ -50,12 +51,12 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  verification: {
-    google: 'your-google-verification-code',
-  },
 }
 
 export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
   colorScheme: 'light',
 }
 
@@ -76,20 +77,9 @@ export default function RootLayout({
               name: 'HASHCODE Community',
               description: 'Communauté technique autour de la cybersécurité, l\'intelligence artificielle et le cloud computing.',
               url: 'https://community.joinhashcode.com',
-              logo: 'https://community.joinhashcode.com/placeholder-logo.svg',
               sameAs: [
                 'https://github.com/digitaleflex/hashcode-community-portal',
               ],
-              contactPoint: {
-                '@type': 'ContactPoint',
-                email: 'noreply@joinhashcode.com',
-                contactType: 'customer support',
-              },
-              areaServed: 'FR',
-              member: {
-                '@type': 'Organization',
-                name: 'HASHCODE Community',
-              },
             }),
           }}
         />
@@ -98,6 +88,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         {children}
+        <ToastContainer />
         <Analytics />
       </body>
     </html>

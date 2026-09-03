@@ -2,36 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Shield, Brain, Cloud, ArrowLeft, Mail, MapPin, Calendar, Check } from 'lucide-react'
+import { ArrowLeft, MapPin, Calendar, ArrowRight, MessageCircle, UserPlus, Share2, ExternalLink } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { fetchCommunityStats, type CommunityStats } from '@/lib/client-stats'
-
-const poleIcon = (slug: string) => {
-  switch (slug) {
-    case 'security': return <Shield size={20} />
-    case 'ai': return <Brain size={20} />
-    case 'cloud': return <Cloud size={20} />
-    default: return null
-  }
-}
-
-const poleLabel = (slug: string) => {
-  switch (slug) {
-    case 'security': return 'HASHCODE Security'
-    case 'ai': return 'HASHCODE AI'
-    case 'cloud': return 'HASHCODE Cloud'
-    default: return slug
-  }
-}
-
-const levelLabel = (level: string) => {
-  switch (level) {
-    case 'beginner': return 'Débutant'
-    case 'intermediate': return 'Intermédiaire'
-    case 'advanced': return 'Avancé'
-    default: return level
-  }
-}
+import { poleIcon, poleLabel, levelLabel, getInitials } from '@/lib/display'
 
 export default function PublicProfilePage() {
   const params = useParams()
@@ -54,7 +28,7 @@ export default function PublicProfilePage() {
       if (!res.ok) throw new Error('Membre non trouvé')
       const data = await res.json()
       setMember(data)
-    } catch (err) {
+    } catch {
       setError('Ce membre n\'existe pas ou a été supprimé.')
     } finally {
       setLoading(false)
@@ -95,9 +69,8 @@ export default function PublicProfilePage() {
   const profile = member.profile
   const poles = member.poles || []
   const interests = member.interests || []
-  const commPrefs = member.communicationPrefs
 
-  const initials = (m.firstName?.[0] || m.email[0]).toUpperCase() + (m.lastName?.[0] || '').toUpperCase()
+  const initials = getInitials(m.firstName, m.lastName)
   const fullName = [m.firstName, m.lastName].filter(Boolean).join(' ') || 'Membre HASHCODE'
 
   return (
@@ -137,12 +110,11 @@ export default function PublicProfilePage() {
               {initials}
             </div>
             <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>{fullName}</h1>
-            <p style={{ color: 'var(--muted-foreground)', marginBottom: '16px' }}>{m.email}</p>
-            
+
             <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', flexWrap: 'wrap' }}>
-              {m.country && (
+              {(m.city || m.country) && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--muted-foreground)', fontSize: '14px' }}>
-                  <MapPin size={16} /> {m.country}
+                  <MapPin size={16} /> {[m.city, m.country].filter(Boolean).join(', ')}
                 </span>
               )}
               <span className={`status ${m.status === 'active' ? 'active' : 'pending'}`}>
@@ -157,13 +129,13 @@ export default function PublicProfilePage() {
             )}
 
             {profile?.linkedinUrl && (
-              <a 
+              <a
                 href={profile.linkedinUrl}
                 target="_blank"
                 rel="noreferrer"
-                style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
                   gap: '8px',
                   marginTop: '16px',
                   color: 'var(--primary)',
@@ -171,9 +143,43 @@ export default function PublicProfilePage() {
                   fontWeight: 600
                 }}
               >
-                <Mail size={16} /> Voir le profil LinkedIn
+                <ExternalLink size={14} /> Voir le profil LinkedIn
               </a>
             )}
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="primary-button"
+                onClick={() => router.push('/auth/verify')}
+                style={{ fontSize: '14px', padding: '10px 20px' }}
+              >
+                <UserPlus size={16} /> Rejoindre HASHCODE
+              </button>
+              {profile?.linkedinUrl && (
+                <a
+                  href={profile.linkedinUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="secondary-button"
+                  style={{ fontSize: '14px', padding: '10px 20px', textDecoration: 'none' }}
+                >
+                  <MessageCircle size={16} /> Contactez-le
+                </a>
+              )}
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({ title: fullName, url: window.location.href })
+                  } else {
+                    navigator.clipboard.writeText(window.location.href)
+                  }
+                }}
+                style={{ fontSize: '14px', padding: '10px 20px' }}
+              >
+                <Share2 size={16} /> Partager
+              </button>
+            </div>
           </div>
 
           {/* Pôles */}
@@ -181,8 +187,8 @@ export default function PublicProfilePage() {
             <section style={{ marginBottom: '32px' }}>
               <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Pôles HASHCODE</h2>
               <div className="pole-list">
-                {poles.map((p: any) => (
-                  <div key={p.id || p.pole?.slug} className="pole-row" style={{
+                {poles.map((p: any, idx: number) => (
+                  <div key={p.pole?.id || idx} className="pole-row" style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '16px',
@@ -201,10 +207,10 @@ export default function PublicProfilePage() {
                       display: 'grid',
                       placeItems: 'center'
                     }}>
-                      {poleIcon(p.pole?.slug || p.slug)}
+                      {poleIcon(p.pole?.slug || '', 20)}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <b>{poleLabel(p.pole?.slug || p.slug)}</b>
+                      <b>{poleLabel(p.pole?.slug || '')}</b>
                       <div style={{ fontSize: '12px', color: 'var(--muted-foreground)', marginTop: '4px' }}>
                         Niveau : {levelLabel(p.level)}
                       </div>
@@ -223,7 +229,7 @@ export default function PublicProfilePage() {
               <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Centres d'intérêt</h2>
               <div className="tags">
                 {interests.map((i: any) => (
-                  <span key={i.id || i} className="tag">{i.name || i}</span>
+                  <span key={i.id} className="tag">{i.name}</span>
                 ))}
               </div>
             </section>
@@ -233,8 +239,6 @@ export default function PublicProfilePage() {
           <section style={{ marginBottom: '32px' }}>
             <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>À propos</h2>
             <dl className="profile-dl">
-              {m.age && <><dt>Âge</dt><dd>{m.age} ans</dd></>}
-              {m.city && <><dt>Ville</dt><dd>{m.city}</dd></>}
               {profile?.occupation && <><dt>Statut</dt><dd>{profile.occupation}</dd></>}
               {profile?.timeAvailable && <><dt>Disponibilité</dt><dd>{profile.timeAvailable}h/semaine</dd></>}
               <dt>Membre depuis</dt>
@@ -252,12 +256,12 @@ export default function PublicProfilePage() {
             borderRadius: '16px',
             textAlign: 'center'
           }}>
-            <h3 style={{ marginBottom: '12px' }}>Tu veux rejoindre HASHCODE ?</h3>
+            <h3 style={{ marginBottom: '12px' }}>Rejoins {fullName.split(' ')[0]} dans HASHCODE</h3>
             <p style={{ opacity: 0.8, marginBottom: '20px', fontSize: '14px' }}>
-              Découvre les {stats ? stats.total : '…'} membres de notre communauté et inscris-toi pour participer aux prochains événements.
+              Découvre les {stats ? stats.total : '…'} membres de notre communauté et connecte-vous avec des experts Security, AI et Cloud.
             </p>
             <button className="primary-button" onClick={() => router.push('/auth/verify')} style={{ background: 'var(--primary-foreground)', color: 'var(--foreground)' }}>
-              Vérifier mon profil <ArrowLeft size={18} style={{ transform: 'rotate(180deg)' }} />
+              Créer mon profil <ArrowRight size={18} />
             </button>
           </div>
         </div>

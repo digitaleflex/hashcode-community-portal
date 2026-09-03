@@ -1,49 +1,49 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Shield, Brain, Cloud, Loader2, Check, LogOut } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import {
+  Loader2,
+  Check,
+  MapPin,
+  Phone,
+  Mail,
+  Edit3,
+  X,
+  ExternalLink,
+  User,
+  Briefcase,
+  Globe,
+  Shield,
+  Users,
+  ArrowRight,
+  Target,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import {
+  poleIcon,
+  poleLabel,
+  poleDescription,
+  levelLabel,
+  levelColor,
+  commPrefLabel,
+  commPrefIcon,
+  getInitials,
+} from '@/lib/display'
+import { validators } from '@/lib/validation'
+import UserSidebar from '@/components/UserSidebar'
+import { toast } from '@/components/Toast'
+import { PrivacyBadge } from '@/lib/display'
+import { Breadcrumbs } from '@/components/Breadcrumbs'
 
-const poleIcon = (slug: string) => {
-  switch (slug) {
-    case 'security': return <Shield size={16} />
-    case 'ai': return <Brain size={16} />
-    case 'cloud': return <Cloud size={16} />
-    default: return null
-  }
-}
-
-const poleLabel = (slug: string) => {
-  switch (slug) {
-    case 'security': return 'HASHCODE Security'
-    case 'ai': return 'HASHCODE AI'
-    case 'cloud': return 'HASHCODE Cloud'
-    default: return slug
-  }
-}
-
-const levelLabel = (level: string) => {
-  switch (level) {
-    case 'beginner': return 'Débutant'
-    case 'intermediate': return 'Intermédiaire'
-    case 'advanced': return 'Avancé'
-    default: return level
-  }
-}
-
-const commPrefLabel = (key: string) => {
-  switch (key) {
-    case 'community': return 'Communauté'
-    case 'security': return 'HASHCODE Security'
-    case 'ai': return 'HASHCODE AI'
-    case 'cloud': return 'HASHCODE Cloud'
-    case 'training': return 'Formations'
-    case 'workshops': return 'Workshops'
-    case 'opportunities': return 'Opportunités'
-    case 'projects': return 'Projets'
-    default: return key
-  }
-}
+const GENDERS = [
+  { id: '', label: 'Sélectionner' },
+  { id: 'male', label: 'Masculin' },
+  { id: 'female', label: 'Féminin' },
+  { id: 'other', label: 'Autre' },
+  { id: 'prefer_not_to_say', label: 'Préfère ne pas dire' },
+]
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -53,10 +53,12 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState(false)
   const [data, setData] = useState<any>(null)
   const [editMode, setEditMode] = useState(false)
+  const previousDataRef = useRef<typeof form | null>(null)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
     age: '',
+    gender: '',
     country: '',
     city: '',
     phone: '',
@@ -75,56 +77,112 @@ export default function ProfilePage() {
   })
 
   useEffect(() => {
-    fetchProfile()
-  }, [])
+    const controller = new AbortController()
+    setLoading(true)
+    fetch('/api/members/me', { signal: controller.signal })
+      .then((res) => {
+        if (res.status === 401) {
+          router.push('/auth/verify')
+          return null
+        }
+        return res.json()
+      })
+      .then((data) => {
+        if (!data) return
+        setData(data)
+        if (data.member) {
+          setForm({
+            firstName: data.member.firstName || '',
+            lastName: data.member.lastName || '',
+            age: data.member.age?.toString() || '',
+            gender: data.member.gender || '',
+            country: data.member.country || '',
+            city: data.member.city || '',
+            phone: data.member.phone || '',
+            linkedinUrl: data.profile?.linkedinUrl || '',
+            bio: data.profile?.bio || '',
+          })
+        }
+        if (data.communicationPrefs) {
+          setCommPrefs({
+            community: data.communicationPrefs.community,
+            security: data.communicationPrefs.security,
+            ai: data.communicationPrefs.ai,
+            cloud: data.communicationPrefs.cloud,
+            training: data.communicationPrefs.training,
+            workshops: data.communicationPrefs.workshops,
+            opportunities: data.communicationPrefs.opportunities,
+            projects: data.communicationPrefs.projects,
+          })
+        }
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') setError('Erreur de chargement')
+      })
+      .finally(() => setLoading(false))
+    return () => controller.abort()
+  }, [router])
 
-  const fetchProfile = async () => {
-    try {
-      const res = await fetch('/api/members/me')
-      if (res.status === 401) {
-        router.push('/auth/verify')
-        return
-      }
-      const data = await res.json()
-      setData(data)
-      if (data.member) {
-        setForm((f) => ({
-          ...f,
-          firstName: data.member.firstName || '',
-          lastName: data.member.lastName || '',
-          age: data.member.age?.toString() || '',
-          country: data.member.country || '',
-          city: data.member.city || '',
-          phone: data.member.phone || '',
-        }))
-      }
-      if (data.profile) {
-        setForm((f) => ({
-          ...f,
-          linkedinUrl: data.profile.linkedinUrl || '',
-          bio: data.profile.bio || '',
-        }))
-      }
-      if (data.communicationPrefs) {
-        setCommPrefs({
-          community: data.communicationPrefs.community,
-          security: data.communicationPrefs.security,
-          ai: data.communicationPrefs.ai,
-          cloud: data.communicationPrefs.cloud,
-          training: data.communicationPrefs.training,
-          workshops: data.communicationPrefs.workshops,
-          opportunities: data.communicationPrefs.opportunities,
-          projects: data.communicationPrefs.projects,
-        })
-      }
-    } catch (err) {
-      setError('Erreur de chargement')
-    } finally {
-      setLoading(false)
-    }
+  const fetchProfile = () => {
+    const controller = new AbortController()
+    setLoading(true)
+    fetch('/api/members/me', { signal: controller.signal })
+      .then((res) => {
+        if (res.status === 401) {
+          router.push('/auth/verify')
+          return null
+        }
+        return res.json()
+      })
+      .then((data) => {
+        if (!data) return
+        setData(data)
+        if (data.member) {
+          setForm({
+            firstName: data.member.firstName || '',
+            lastName: data.member.lastName || '',
+            age: data.member.age?.toString() || '',
+            gender: data.member.gender || '',
+            country: data.member.country || '',
+            city: data.member.city || '',
+            phone: data.member.phone || '',
+            linkedinUrl: data.profile?.linkedinUrl || '',
+            bio: data.profile?.bio || '',
+          })
+        }
+        if (data.communicationPrefs) {
+          setCommPrefs({
+            community: data.communicationPrefs.community,
+            security: data.communicationPrefs.security,
+            ai: data.communicationPrefs.ai,
+            cloud: data.communicationPrefs.cloud,
+            training: data.communicationPrefs.training,
+            workshops: data.communicationPrefs.workshops,
+            opportunities: data.communicationPrefs.opportunities,
+            projects: data.communicationPrefs.projects,
+          })
+        }
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') setError('Erreur de chargement')
+      })
+      .finally(() => setLoading(false))
+    return () => controller.abort()
   }
 
   const handleSave = async () => {
+    // Same rules as the server (lib/server-validation.ts).
+    if (form.age) {
+      const ageCheck = validators.age(form.age)
+      if (!ageCheck.valid) {
+        const msg = ageCheck.message || 'Âge invalide'
+        setError(msg)
+        toast(msg, 'error')
+        return
+      }
+    }
+
+    previousDataRef.current = { ...form }
     setSaving(true)
     setError(null)
     setSuccess(false)
@@ -135,7 +193,8 @@ export default function ProfilePage() {
         body: JSON.stringify({
           firstName: form.firstName || null,
           lastName: form.lastName || null,
-          age: form.age ? parseInt(form.age) : null,
+          age: form.age || null,
+          gender: form.gender || null,
           country: form.country || null,
           city: form.city || null,
           phone: form.phone || null,
@@ -149,26 +208,44 @@ export default function ProfilePage() {
         setEditMode(false)
         fetchProfile()
         setTimeout(() => setSuccess(false), 3000)
+        toast('Profil mis à jour', 'success')
       } else {
-        setError('Erreur lors de la sauvegarde')
+        const data = await res.json().catch(() => null)
+        const msg = data?.error || 'Erreur lors de la sauvegarde'
+        setError(msg)
+        toast(msg, 'error')
       }
     } catch {
-      setError('Erreur réseau')
+      const msg = 'Erreur réseau'
+      setError(msg)
+      toast(msg, 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/session', { method: 'DELETE' })
-    router.push('/')
-  }
-
   if (loading) {
     return (
-      <main className="min-h-screen bg-background">
-        <div style={{ textAlign: 'center', padding: '120px' }}>Chargement…</div>
-      </main>
+      <div className="page-with-sidebar">
+        <UserSidebar />
+        <main className="user-main">
+          <div className="profile-container">
+            <div className="profile-header" style={{ opacity: 0.5 }}>
+              <div className="skeleton skeleton-circle" style={{ width: 120, height: 120 }} />
+              <div>
+                <div className="skeleton skeleton-text tall" style={{ width: 200 }} />
+                <div className="skeleton skeleton-text" style={{ width: 160, marginTop: 8 }} />
+              </div>
+            </div>
+            <div className="profile-section">
+              <div className="skeleton skeleton-text" style={{ width: 120, height: 24, marginBottom: 16 }} />
+              <div className="skeleton skeleton-card" />
+              <div className="skeleton skeleton-card" />
+              <div className="skeleton skeleton-card" />
+            </div>
+          </div>
+        </main>
+      </div>
     )
   }
 
@@ -179,195 +256,493 @@ export default function ProfilePage() {
   const comms = data?.communicationPrefs
 
   return (
-    <main className="min-h-screen bg-background">
-      <header className="site-header">
-        <div className="brand">
-          <span className="brand-mark">H</span>
-          <span>HASHCODE</span>
-        </div>
-        <div className="header-actions">
-          {data?.isAdmin && (
-            <button className="text-button" onClick={() => router.push('/admin')}>Admin</button>
-          )}
-          <button className="text-button" onClick={handleLogout}><LogOut size={14} /> Déconnexion</button>
-        </div>
-      </header>
+    <div className="page-with-sidebar">
+      <UserSidebar />
+      <main className="user-main">
+        <div className="profile-container">
+          <Breadcrumbs />
+          {/* ── HEADER ──────────────────────────────────── */}
+          <div className="profile-header">
+            <div className="profile-avatar">
+              {getInitials(member?.firstName, member?.lastName)}
+            </div>
+            <div className="profile-info">
+              <h1>{member?.firstName ? `${member.firstName} ${member.lastName || ''}` : 'Bienvenue'}</h1>
+              <div className="profile-handle" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span>{member?.email}</span>
+                <PrivacyBadge level="public" />
+              </div>
+              <div className="profile-meta">
+                {member?.city && (
+                  <span className="profile-meta-item">
+                    <MapPin size={14} /> {member.city}{member?.country ? `, ${member.country}` : ''}
+                  </span>
+                )}
+                {member?.phone && (
+                  <span className="profile-meta-item">
+                    <Phone size={14} /> {member.phone}
+                  </span>
+                )}
+                <span className="profile-meta-item" style={{
+                  background: member?.status === 'active' ? '#dcfce7' : '#fef3c7',
+                  color: member?.status === 'active' ? '#166534' : '#92400e',
+                  padding: '2px 10px',
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}>
+                  {member?.status === 'active' ? <Check size={12} strokeWidth={2.5} /> : null}
+                  {member?.status === 'active' ? 'Actif' : 'En attente'}
+                </span>
+              </div>
+            </div>
+            <div className="profile-actions">
+              {!editMode ? (
+                <>
+                  <button className="primary-button" onClick={() => setEditMode(true)}>
+                    <Edit3 size={16} /> Modifier
+                  </button>
+                  {member?.id && (
+                    <a
+                      href={`/m/${member.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-button"
+                      style={{ fontSize: '13px', color: 'var(--muted-foreground)' }}
+                    >
+                      Voir mon profil public
+                    </a>
+                  )}
+                </>
+              ) : (
+                <button className="text-button" onClick={() => { setEditMode(false); fetchProfile() }}>
+                  <X size={16} /> Annuler
+                </button>
+              )}
+            </div>
+          </div>
 
-      <div className="onboarding-wrap">
-        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <p className="eyebrow"><span className="eyebrow-dot" /> Mon profil</p>
-          <h1 style={{ fontSize: 'clamp(40px, 5vw, 56px)', margin: '0 0 8px', letterSpacing: '-.04em' }}>
-            {member?.firstName ? `Bonjour, ${member.firstName}` : 'Bienvenue'}
-          </h1>
-          <p style={{ color: 'var(--muted-foreground)', marginBottom: '32px' }}>
-            {member?.email}
-          </p>
-
+          {/* ── ALERTS ──────────────────────────────────── */}
           {error && <div className="error-banner">{error}</div>}
-          {success && <div className="success-banner">✓ Profil mis à jour avec succès</div>}
+          {success && (
+            <div className="success-banner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={18} />
+                <span>Profil mis à jour</span>
+              </div>
+              {previousDataRef.current && (
+                <button
+                  className="text-button"
+                  style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}
+                  onClick={async () => {
+                    if (!previousDataRef.current) return
+                    await fetch('/api/members/me', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(previousDataRef.current),
+                    })
+                    setForm(previousDataRef.current)
+                    previousDataRef.current = null
+                  }}
+                >
+                  Annuler
+                </button>
+              )}
+            </div>
+          )}
 
-          {!editMode && (
+          {/* ── VIEW MODE ──────────────────────────────── */}
+          {!editMode ? (
             <>
-              <section style={{ marginBottom: '40px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h2 style={{ fontSize: '20px', margin: 0 }}>Identité</h2>
-                  <button className="text-button" onClick={() => setEditMode(true)}>Modifier</button>
+              {/* Identity Section */}
+              <div className="profile-section">
+                <h2><User size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Identité</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Prénom</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{member?.firstName || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Nom</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{member?.lastName || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Âge</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{member?.age || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Pays</div>
+                    <div style={{ fontSize: 15, fontWeight: 600 }}>{member?.country || '—'}</div>
+                  </div>
                 </div>
-                <dl className="profile-dl">
-                  <dt>Prénom</dt><dd>{member?.firstName || '—'}</dd>
-                  <dt>Nom</dt><dd>{member?.lastName || '—'}</dd>
-                  <dt>Âge</dt><dd>{member?.age || '—'}</dd>
-                  <dt>Pays</dt><dd>{member?.country || '—'}</dd>
-                  <dt>Ville</dt><dd>{member?.city || '—'}</dd>
-                  <dt>Téléphone</dt><dd>{member?.phone || '—'}</dd>
-                  <dt>Statut</dt><dd><span className={`status ${member?.status === 'active' ? 'active' : 'pending'}`}>{member?.status}</span></dd>
-                </dl>
-              </section>
+              </div>
 
-              {profile && (
-                <section style={{ marginBottom: '40px' }}>
-                  <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Profil</h2>
-                  <dl className="profile-dl">
-                    <dt>Occupation</dt><dd>{profile.occupation || '—'}</dd>
-                    <dt>LinkedIn</dt><dd>{profile.linkedinUrl ? <a href={profile.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }}>Voir profil</a> : '—'}</dd>
-                    <dt>Bio</dt><dd>{profile.bio || '—'}</dd>
-                  </dl>
-                </section>
+              {/* Profile Section */}
+              {(profile?.occupation || profile?.bio || profile?.linkedinUrl) && (
+                <div className="profile-section">
+                  <h2><Briefcase size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Profil professionnel</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+                    {profile?.occupation && (
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Occupation</div>
+                        <div style={{ fontSize: 15, fontWeight: 600, textTransform: 'capitalize' }}>{profile.occupation}</div>
+                      </div>
+                    )}
+                    {profile?.linkedinUrl && (
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>LinkedIn</div>
+                        <a href={profile.linkedinUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontSize: 15, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          Voir profil <ExternalLink size={14} />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                  {profile?.bio && (
+                    <div style={{ marginTop: 20 }}>
+                      <div style={{ fontSize: 12, color: 'var(--muted-foreground)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Bio</div>
+                      <div style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--foreground)' }}>{profile.bio}</div>
+                    </div>
+                  )}
+                </div>
               )}
 
+              {/* Poles Section */}
               {poles.length > 0 && (
-                <section style={{ marginBottom: '40px' }}>
-                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Pôles ({poles.length})</h2>
-                  <div className="pole-list">
+                <div className="profile-section">
+                  <h2><Shield size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Pôles ({poles.length})</h2>
+                  <div className="pole-cards">
                     {poles.map((p: any) => (
-                      <div key={p.id} className="pole-row">
-                        <div className="pole-row-icon">{poleIcon(p.pole.slug)}</div>
-                        <b>{poleLabel(p.pole.slug)}</b>
-                        <span className="level-tag">{levelLabel(p.level)}</span>
-                        {p.isPrimary && <span className="primary-tag">Principal</span>}
+                      <div key={p.id} className="pole-card">
+                        <div className={`pole-card-icon ${p.pole.slug}`}>
+                          {poleIcon(p.pole.slug)}
+                        </div>
+                        <h3>{poleLabel(p.pole.slug)}</h3>
+                        <p>{poleDescription(p.pole.slug)}</p>
+                        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: levelColor(p.level),
+                            background: `${levelColor(p.level)}15`,
+                            padding: '4px 10px',
+                            borderRadius: 999,
+                          }}>
+                            {levelLabel(p.level)}
+                          </span>
+                          {p.isPrimary && (
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              background: 'var(--primary)',
+                              color: 'white',
+                              padding: '4px 10px',
+                              borderRadius: 999,
+                              textTransform: 'uppercase',
+                              letterSpacing: '.05em',
+                            }}>
+                              Principal
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
-                </section>
+                </div>
               )}
 
+              {/* Interests Section */}
               {interests.length > 0 && (
-                <section style={{ marginBottom: '40px' }}>
-                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Intérêts ({interests.length})</h2>
-                  <div className="tags">
+                <div className="profile-section">
+                  <h2><Globe size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Intérêts ({interests.length})</h2>
+                  <div className="interest-tags">
                     {interests.map((i: any) => (
-                      <span key={i.id} className="tag">{i.name}</span>
+                      <span key={i.id} className="interest-tag">{i.name}</span>
                     ))}
                   </div>
-                </section>
+                </div>
               )}
 
+              {/* Communication Preferences */}
               {comms && (
-                <section style={{ marginBottom: '40px' }}>
-                  <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Préférences de communication</h2>
-                  <div className="tags">
+                <div className="profile-section">
+                  <h2><Mail size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Préférences de communication</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
                     {Object.entries(comms)
                       .filter(([k, v]: [string, any]) => v === true && k !== 'id' && k !== 'memberId')
-                      .map(([k]) => <span key={k} className="tag">✓ {commPrefLabel(k)}</span>)
+                      .map(([k]) => (
+                        <div key={k} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '12px 16px',
+                          background: 'var(--background)',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border)',
+                        }}>
+                          <span style={{
+                            color: 'var(--primary)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}>
+                            {commPrefIcon(k, 18)}
+                          </span>
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>{commPrefLabel(k)}</span>
+                        </div>
+                      ))
                     }
                   </div>
-                </section>
+                </div>
               )}
 
-              {poles.length === 0 && interests.length === 0 && (
-                <section className="info-card" style={{ marginBottom: '40px' }}>
-                  <p>Tu n'as pas encore complété ton profil.</p>
-                  <button className="primary-button" onClick={() => router.push('/onboarding')}>
-                    Compléter mon profil
+              {/* Goal Gradient - Next Steps */}
+              <div className="profile-section" style={{ background: 'linear-gradient(135deg, var(--card) 0%, #f0fdf4 100%)', border: '1px solid #bbf7d0' }}>
+                <h2 style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 8 }}><Target size={18} style={{ marginRight: 8, verticalAlign: 'middle', color: '#16a34a' }} /> Prochaines étapes</h2>
+                <p style={{ fontSize: 14, color: 'var(--muted-foreground)', marginBottom: 20 }}>
+                  Continue à enrichir ton profil et connecte-toi avec la communauté.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <button
+                    className="secondary-button"
+                    onClick={() => router.push('/members')}
+                    style={{ justifyContent: 'flex-start', padding: '16px', height: 'auto', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Users size={16} style={{ color: 'var(--primary)' }} />
+                      <span style={{ fontWeight: 700 }}>Découvrir les membres</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Explore l'annuaire et trouve des collaborateurs</span>
                   </button>
-                </section>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setEditMode(true)}
+                    style={{ justifyContent: 'flex-start', padding: '16px', height: 'auto', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Edit3 size={16} style={{ color: 'var(--primary)' }} />
+                      <span style={{ fontWeight: 700 }}>Compléter ton profil</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Ajoute ta bio, photo et LinkedIn</span>
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => router.push('/onboarding')}
+                    style={{ justifyContent: 'flex-start', padding: '16px', height: 'auto', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <ArrowRight size={16} style={{ color: 'var(--primary)' }} />
+                      <span style={{ fontWeight: 700 }}>Modifier mes pôles</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }}>Change tes domaines ou niveaux</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Empty State */}
+              {poles.length === 0 && interests.length === 0 && (
+                <div className="profile-section" style={{ textAlign: 'center', padding: '48px 24px' }}>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: 64,
+                      height: 64,
+                      borderRadius: '50%',
+                      background: 'var(--primary-glow, rgba(181, 61, 31, 0.08))',
+                      color: 'var(--primary)',
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Sparkles size={32} strokeWidth={1.75} />
+                  </div>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Bienvenue sur HASHCODE</h3>
+                  <p style={{ color: 'var(--muted-foreground)', marginBottom: 32, maxWidth: 400, margin: '0 auto 32px' }}>
+                    Complète ton profil en 3 étapes pour rejoindre la communauté.
+                  </p>
+                  <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>1</span>
+                      <span style={{ fontSize: 14, fontWeight: 500 }}>Choisis tes pôles</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>2</span>
+                      <span style={{ fontSize: 14, fontWeight: 500 }}>Ajoute tes intérêts</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', background: 'var(--background)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                      <span style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>3</span>
+                      <span style={{ fontSize: 14, fontWeight: 500 }}>Définis tes notifs</span>
+                    </div>
+                  </div>
+                  <button className="primary-button" onClick={() => router.push('/onboarding')}>
+                    Compléter mon profil <ArrowRight size={16} />
+                  </button>
+                </div>
               )}
             </>
-          )}
-
-          {editMode && (
+          ) : (
+            /* ── EDIT MODE ──────────────────────────────── */
             <>
-              <h2 style={{ fontSize: '20px', margin: '0 0 20px' }}>Modifier mon profil</h2>
-              <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: '32px' }}>
-                <div><label>Prénom</label><input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} /></div>
-                <div><label>Nom</label><input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} /></div>
-                <div><label>Âge</label><input type="number" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></div>
-                <div><label>Pays</label><input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} /></div>
-                <div><label>Ville</label><input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></div>
-                <div><label>Téléphone</label><input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label>LinkedIn</label><input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label>Bio</label><input value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} /></div>
+              <div className="profile-section">
+                <h2><User size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Informations personnelles</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Prénom</label>
+                    <input
+                      className="form-input"
+                      value={form.firstName}
+                      onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                      placeholder="Ton prénom"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Nom</label>
+                    <input
+                      className="form-input"
+                      value={form.lastName}
+                      onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                      placeholder="Ton nom"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Âge</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      value={form.age}
+                      onChange={(e) => setForm({ ...form, age: e.target.value })}
+                      placeholder="25"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Pays</label>
+                    <input
+                      className="form-input"
+                      value={form.country}
+                      onChange={(e) => setForm({ ...form, country: e.target.value })}
+                      placeholder="Cameroun"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Ville</label>
+                    <input
+                      className="form-input"
+                      value={form.city}
+                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                      placeholder="Douala"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Téléphone</label>
+                    <input
+                      className="form-input"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      placeholder="+237 6XX XXX XXX"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Genre</label>
+                    <select
+                      className="form-input"
+                      value={form.gender}
+                      onChange={(e) => setForm({ ...form, gender: e.target.value })}
+                    >
+                      {GENDERS.map((g) => (
+                        <option key={g.id} value={g.id}>{g.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              <h2 style={{ fontSize: '20px', margin: '0 0 16px' }}>Préférences de communication</h2>
-              <div className="comm-prefs" style={{ marginBottom: '32px' }}>
-                <div className="comm-group">
-                  <h3>Pôles HASHCODE</h3>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.security} onChange={(e) => setCommPrefs({ ...commPrefs, security: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    HASHCODE Security
-                  </label>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.ai} onChange={(e) => setCommPrefs({ ...commPrefs, ai: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    HASHCODE AI
-                  </label>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.cloud} onChange={(e) => setCommPrefs({ ...commPrefs, cloud: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    HASHCODE Cloud
-                  </label>
-                </div>
-                <div className="comm-group">
-                  <h3>Activités</h3>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.training} onChange={(e) => setCommPrefs({ ...commPrefs, training: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    Formations
-                  </label>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.workshops} onChange={(e) => setCommPrefs({ ...commPrefs, workshops: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    Workshops
-                  </label>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.opportunities} onChange={(e) => setCommPrefs({ ...commPrefs, opportunities: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    Opportunités
-                  </label>
-                  <label className="toggle">
-                    <label className="toggle-switch">
-                      <input type="checkbox" checked={commPrefs.projects} onChange={(e) => setCommPrefs({ ...commPrefs, projects: e.target.checked })} />
-                      <span className="toggle-slider"></span>
-                    </label>
-                    Projets
-                  </label>
+              <div className="profile-section">
+                <h2><Briefcase size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Profil professionnel</h2>
+                <div style={{ display: 'grid', gap: '20px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>LinkedIn URL</label>
+                    <input
+                      className="form-input"
+                      value={form.linkedinUrl}
+                      onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })}
+                      placeholder="https://linkedin.com/in/ton-profil"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--muted-foreground)', marginBottom: 6 }}>Bio</label>
+                    <textarea
+                      className="form-input"
+                      rows={3}
+                      value={form.bio}
+                      onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                      placeholder="Parle de toi, de ton parcours, de ce qui te passionne..."
+                      style={{ resize: 'vertical', minHeight: 80 }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button className="primary-button" onClick={handleSave} disabled={saving}>
-                  {saving ? <><Loader2 className="spin" size={18} /> Sauvegarde…</> : <>Sauvegarder <Check size={18} /></>}
+              <div className="profile-section">
+                <h2><Mail size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Préférences de communication</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' }}>Pôles HASHCODE</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(['security', 'ai', 'cloud'] as const).map((key) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: `1px solid ${commPrefs[key] ? 'var(--primary)' : 'var(--border)'}`, background: commPrefs[key] ? '#fef2f2' : 'transparent', transition: 'all .15s' }}>
+                          <button
+                            type="button"
+                            className={`toggle ${commPrefs[key] ? 'active' : ''}`}
+                            aria-pressed={commPrefs[key]}
+                            aria-label={poleLabel(key)}
+                            onClick={() => setCommPrefs({ ...commPrefs, [key]: !commPrefs[key] })}
+                          />
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>{poleLabel(key)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--foreground)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.05em' }}>Activités</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(['training', 'workshops', 'opportunities', 'projects'] as const).map((key) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: `1px solid ${commPrefs[key] ? 'var(--primary)' : 'var(--border)'}`, background: commPrefs[key] ? '#f0fdf4' : 'transparent', transition: 'all .15s' }}>
+                          <button
+                            type="button"
+                            className={`toggle ${commPrefs[key] ? 'active' : ''}`}
+                            aria-pressed={commPrefs[key]}
+                            aria-label={commPrefLabel(key)}
+                            onClick={() => setCommPrefs({ ...commPrefs, [key]: !commPrefs[key] })}
+                          />
+                          <span style={{ fontSize: 14, fontWeight: 500 }}>{commPrefLabel(key)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{
+                position: 'sticky', bottom: 0, left: 0, right: 0,
+                padding: '16px 24px env(safe-area-inset-bottom)',
+                background: 'var(--card)', borderTop: '1px solid var(--border)',
+                display: 'flex', justifyContent: 'flex-end', gap: '12px',
+                zIndex: 10,
+                boxShadow: '0 -2px 12px rgba(0,0,0,0.08)',
+              }}>
+                <button className="text-button" onClick={() => { setEditMode(false); fetchProfile() }}>
+                  Annuler
                 </button>
-                <button className="text-button" onClick={() => { setEditMode(false); fetchProfile() }}>Annuler</button>
+                <button className="primary-button" onClick={handleSave} disabled={saving}>
+                  {saving ? <><Loader2 className="animate-spin" size={16} /> Sauvegarde…</> : <><Check size={16} /> Sauvegarder</>}
+                </button>
               </div>
             </>
           )}
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   )
 }

@@ -17,14 +17,17 @@ export default function AuthMagicLink() {
     const params = new URLSearchParams(window.location.search)
     const token = params.get('token')
 
+    // Email is only present on the ?sent=1 flow; fall back to what the
+    // verify page stored so "Renvoyer un lien" also works after expiry.
+    const savedEmail = params.get('email') || sessionStorage.getItem('verify_email')
+    if (savedEmail) setEmail(savedEmail)
+
     if (token) {
       verifyToken(token)
     } else {
       const sent = params.get('sent')
       if (sent === '1') {
         setState('sent')
-        const sentEmail = params.get('email')
-        if (sentEmail) setEmail(sentEmail)
       } else {
         router.replace('/auth/verify')
       }
@@ -48,9 +51,10 @@ export default function AuthMagicLink() {
       }
 
       if (res.ok) {
+        const data = await res.json()
         setState('valid')
         setTimeout(() => {
-          router.push('/profile')
+          router.push(data.redirect || '/profile')
         }, 1500)
       } else {
         setState('invalid')

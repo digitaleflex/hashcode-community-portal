@@ -9,6 +9,7 @@ type ErrorType = 'invalid' | 'expired' | 'network' | 'rate_limit' | null
 interface ErrorResponse {
   error?: string
   code?: string
+  redirect?: string
 }
 
 export default function AuthVerifyOTP() {
@@ -18,15 +19,30 @@ export default function AuthVerifyOTP() {
   const [error, setError] = useState<ErrorType>(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [cooldown, setCooldown] = useState(0)
+  const [resent, setResent] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [loadingSession, setLoadingSession] = useState(true)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
   const router = useRouter()
 
+  // Session loading effect with redirect guard
   useEffect(() => {
     const savedEmail = sessionStorage.getItem('verify_email')
-    if (savedEmail) {
-      setEmail(savedEmail)
+    if (!savedEmail) {
+      setLoadingSession(false)
+      router.push('/auth/verify')
+      return
     }
-  }, [])
+    setEmail(savedEmail)
+    setLoadingSession(false)
+  }, [router])
+
+  // Auto-submit when code is complete
+  useEffect(() => {
+    if (code.length === 6 && !isVerifying && !loading) {
+      handleVerify()
+    }
+  }, [code, isVerifying, loading])
 
   useEffect(() => {
     if (cooldown > 0) {
@@ -42,6 +58,7 @@ export default function AuthVerifyOTP() {
     setLoading(true)
     setError(null)
     setErrorMessage('')
+    setResent(false)
 
     try {
       const res = await fetch('/api/auth/verify-email', {
@@ -55,6 +72,8 @@ export default function AuthVerifyOTP() {
         setError('rate_limit')
         setErrorMessage(data.error || 'Trop de tentatives. Réessaie dans 1 minute.')
         setCooldown(0)
+      } else {
+        setResent(true)
       }
     } catch (err) {
       setError('network')
@@ -116,10 +135,10 @@ export default function AuthVerifyOTP() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleVerify = async () => {
     if (!email || code.length !== 6) return
 
+    setIsVerifying(true)
     setLoading(true)
     setError(null)
     setErrorMessage('')
@@ -133,7 +152,7 @@ export default function AuthVerifyOTP() {
       const data: ErrorResponse = await res.json()
 
       if (res.ok) {
-        router.push('/onboarding')
+        router.push(data.redirect || '/onboarding')
       } else {
         // Analyse du type d'erreur
         const msg = data.error || ''
@@ -152,8 +171,14 @@ export default function AuthVerifyOTP() {
       setError('network')
       setErrorMessage('Problème de connexion. Vérifie ta connexion internet.')
     } finally {
+      setIsVerifying(false)
       setLoading(false)
     }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await handleVerify()
   }
 
   const getErrorIcon = () => {
@@ -172,6 +197,23 @@ export default function AuthVerifyOTP() {
       case 'network': return 'Problème de connexion'
       default: return 'Code incorrect'
     }
+  }
+
+  if (loadingSession) {
+    return (
+      <main className="min-h-screen bg-background">
+        <header className="site-header">
+          <div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div>
+        </header>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="skeleton" style={{ height: '24px', width: '60%' }} />
+            <div className="skeleton" style={{ height: '64px' }} />
+            <div className="skeleton" style={{ height: '48px' }} />
+          </div>
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -213,6 +255,13 @@ export default function AuthVerifyOTP() {
               Nous avons envoyé un code à 6 chiffres à l'adresse <strong>{email || '...'}</strong>.
               Vérifiez votre boîte de réception (et le dossier spam).
             </p>
+
+            {resent && !error && (
+              <div className="success-banner" role="status">
+                <CheckCircle2 size={20} />
+                <span>Un nouveau code a été envoyé.</span>
+              </div>
+            )}
 
             {error && (
               <div className="error-banner error-flash">
@@ -289,7 +338,7 @@ export default function AuthVerifyOTP() {
 
       <footer className="footer">
         <div className="brand"><span className="brand-mark">H</span><span>HASHCODE</span></div>
-        <span>© 2024 HASHCODE · La communauté qui vous ressemble.</span>
+        <span>© 2026 HASHCODE Community</span>
       </footer>
     </main>
   )

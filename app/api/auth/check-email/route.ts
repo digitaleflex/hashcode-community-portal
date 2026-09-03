@@ -51,7 +51,11 @@ export async function POST(request: Request) {
       .limit(1);
 
     if (member.length > 0) {
-      return NextResponse.json({ exists: true });
+      return NextResponse.json({
+        exists: true,
+        firstName: member[0].firstName || null,
+        lastName: member[0].lastName || null,
+      });
     }
 
     return NextResponse.json({ exists: false });

@@ -23,7 +23,7 @@ export const memberStatusEnum = pgEnum("member_status", [
   "inactive",
 ]);
 
-export const levelEnum = pgEnum("level", ["beginner", "intermediate", "advanced"]);
+export const levelEnum = pgEnum("level", ["beginner", "intermediate", "advanced", "expert"]);
 
 export const occupationEnum = pgEnum("occupation", [
   "student",
@@ -32,6 +32,13 @@ export const occupationEnum = pgEnum("occupation", [
   "freelancer",
   "seeking_opportunities",
   "other",
+]);
+
+export const genderEnum = pgEnum("gender", [
+  "male",
+  "female",
+  "other",
+  "prefer_not_to_say",
 ]);
 
 // ── MEMBERS ────────────────────────────────────────────
@@ -44,16 +51,19 @@ export const members = pgTable(
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
     age: integer("age"),
+    gender: genderEnum("gender"),
     phone: varchar("phone", { length: 30 }),
     city: varchar("city", { length: 100 }),
     country: varchar("country", { length: 100 }),
     status: memberStatusEnum("status").notNull().default("imported"),
+    role: varchar("role", { length: 20 }).notNull().default("member"), // "member" | "admin"
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("members_status_idx").on(table.status),
     index("members_age_idx").on(table.age),
+    index("members_gender_idx").on(table.gender),
     index("members_city_idx").on(table.city),
     index("members_country_idx").on(table.country),
   ]
@@ -72,6 +82,10 @@ export const membersRelations = relations(members, ({ one, many }) => ({
   }),
   history: many(communityHistory),
   authTokens: many(authTokens),
+  verification: one(memberVerifications, {
+    fields: [members.id],
+    references: [memberVerifications.memberId],
+  }),
 }));
 
 // ── MEMBER PROFILES ────────────────────────────────────
@@ -256,6 +270,92 @@ export const authTokens = pgTable(
 export const authTokensRelations = relations(authTokens, ({ one }) => ({
   member: one(members, {
     fields: [authTokens.memberId],
+    references: [members.id],
+  }),
+}));
+
+// ── MEMBER VERIFICATIONS ────────────────────────────────
+
+export const memberVerifications = pgTable(
+  "member_verifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .unique()
+      .references(() => members.id, { onDelete: "cascade" }),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    linkedinVerified: boolean("linkedin_verified").notNull().default(false),
+    identityVerified: boolean("identity_verified").notNull().default(false),
+    contributor: boolean("contributor").notNull().default(false),
+    verifiedBy: uuid("verified_by"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("member_verifications_member_idx").on(table.memberId),
+  ]
+);
+
+export const memberVerificationsRelations = relations(memberVerifications, ({ one }) => ({
+  member: one(members, {
+    fields: [memberVerifications.memberId],
+    references: [members.id],
+  }),
+}));
+
+// ── MEMBER POINTS ────────────────────────────────────────
+
+export const memberPoints = pgTable(
+  "member_points",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .unique()
+      .references(() => members.id, { onDelete: "cascade" }),
+    points: integer("points").notNull().default(0),
+    level: varchar("level", { length: 50 }).notNull().default("Novice"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("member_points_member_idx").on(table.memberId),
+    index("member_points_points_idx").on(table.points),
+  ]
+);
+
+export const memberPointsRelations = relations(memberPoints, ({ one }) => ({
+  member: one(members, {
+    fields: [memberPoints.memberId],
+    references: [members.id],
+  }),
+}));
+
+// ── POINT EVENTS (audit log) ─────────────────────────────
+
+export const pointEvents = pgTable(
+  "point_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    delta: integer("delta").notNull(),
+    reason: text("reason").notNull(),
+    createdBy: uuid("created_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("point_events_member_idx").on(table.memberId),
+    index("point_events_created_at_idx").on(table.createdAt),
+  ]
+);
+
+export const pointEventsRelations = relations(pointEvents, ({ one }) => ({
+  member: one(members, {
+    fields: [pointEvents.memberId],
     references: [members.id],
   }),
 }));

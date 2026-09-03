@@ -3,8 +3,8 @@ import { db } from '@/lib/db';
 import { members, memberPoles, poles } from '@/lib/db/schema';
 import { eq, sql, count, countDistinct } from 'drizzle-orm';
 
-export const revalidate = 60;
-
+// Dynamic route: the response is cached at the CDN edge via the
+// Cache-Control header below, so no build-time DB access is needed.
 export async function GET() {
   const [totals] = await db
     .select({
@@ -23,6 +23,11 @@ export async function GET() {
     .innerJoin(poles, eq(memberPoles.poleId, poles.id))
     .groupBy(poles.slug);
 
+  const genderStats = await db
+    .select({ gender: members.gender, c: count() })
+    .from(members)
+    .groupBy(members.gender);
+
   const polesCovered = poleStats.length;
 
   return NextResponse.json(
@@ -35,6 +40,7 @@ export async function GET() {
       countries: Number(totals?.countries ?? 0),
       polesCovered,
       poleBreakdown: poleStats.map((p) => ({ slug: p.slug, count: Number(p.c) })),
+      genderBreakdown: genderStats.map((g) => ({ gender: g.gender, count: Number(g.c) })),
     },
     {
       headers: {

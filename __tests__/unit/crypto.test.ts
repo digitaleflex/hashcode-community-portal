@@ -9,11 +9,11 @@ describe('Auth Utilities', () => {
       expect(/^\d{6}$/.test(otp)).toBe(true);
     });
 
-    it('should generate different OTPs on successive calls', () => {
-      const otp1 = generateOTP();
-      const otp2 = generateOTP();
-      // While theoretically possible to get the same OTP, it's extremely unlikely
-      expect(otp1).not.toBe(otp2);
+    it('should generate different OTPs across many calls', () => {
+      // A single pair collides with probability 1e-6; over 200 draws a run of
+      // identical codes would be astronomically unlikely, making the test stable.
+      const otps = new Set(Array.from({ length: 200 }, () => generateOTP()));
+      expect(otps.size).toBeGreaterThan(1);
     });
   });
 

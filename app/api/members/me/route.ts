@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { members, memberProfiles, memberPoles, memberInterests, poles, interests, communicationPreferences } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray, or, ilike } from "drizzle-orm";
 import { getSession } from "@/lib/auth";
+import {
+  validateOptionalString,
+  validateOptionalAge,
+  validateOptionalEnum,
+  validateOptionalLinkedinUrl,
+  validateCommPrefs,
+  validatePoles,
+  validateInterestNames,
+  validateGender,
+  slugifyName,
+  OCCUPATIONS,
+  LEVELS,
+} from "@/lib/server-validation";
+
+type PoleSelection = {
+  slug: string;
+  level: (typeof LEVELS)[number];
+  isPrimary: boolean;
+};
+
+const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
 
 export async function GET() {
   const session = await getSession();
@@ -75,48 +96,119 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const body = await request.json();
-    const {
-      firstName,
-      lastName,
-      age,
-      country,
-      city,
-      phone,
-      occupation,
-      bio,
-      linkedinUrl,
-      poles: polesData,
-      interests: interestsData,
-      communicationPrefs,
-    } = body;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return bad("JSON invalide");
+    }
+    if (typeof body !== "object" || body === null) return bad("Requête invalide");
+    const data = body as Record<string, unknown>;
 
-    // Update member basic info
-    const memberUpdates: any = {};
-    if (firstName !== undefined) memberUpdates.firstName = firstName;
-    if (lastName !== undefined) memberUpdates.lastName = lastName;
-    if (age !== undefined) memberUpdates.age = age;
-    if (country !== undefined) memberUpdates.country = country;
-    if (city !== undefined) memberUpdates.city = city;
-    if (phone !== undefined) memberUpdates.phone = phone;
-    memberUpdates.updatedAt = new Date();
+    // ── VALIDATE EVERYTHING BEFORE TOUCHING THE DATABASE ──
+    const memberUpdates: Record<string, unknown> = {};
+    if (data.firstName !== undefined) {
+      const c = validateOptionalString(data.firstName, 'Prénom', 100);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.firstName = c.value;
+    }
+    if (data.lastName !== undefined) {
+      const c = validateOptionalString(data.lastName, 'Nom', 100);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.lastName = c.value;
+    }
+    if (data.country !== undefined) {
+      const c = validateOptionalString(data.country, 'Pays', 100);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.country = c.value;
+    }
+    if (data.city !== undefined) {
+      const c = validateOptionalString(data.city, 'Ville', 100);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.city = c.value;
+    }
+    if (data.phone !== undefined) {
+      const c = validateOptionalString(data.phone, 'Téléphone', 30);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.phone = c.value;
+    }
+    if (data.age !== undefined) {
+      const c = validateOptionalAge(data.age);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.age = c.value;
+    }
+    if (data.gender !== undefined) {
+      const c = validateGender(data.gender);
+      if (!c.ok) return bad(c.error);
+      memberUpdates.gender = c.value;
+    }
+
+    const profileUpdates: Record<string, unknown> = {};
+    if (data.occupation !== undefined) {
+      const c = validateOptionalEnum(data.occupation, OCCUPATIONS, 'Occupation');
+      if (!c.ok) return bad(c.error);
+      profileUpdates.occupation = c.value;
+    }
+    if (data.bio !== undefined) {
+      const c = validateOptionalString(data.bio, 'Bio', 500);
+      if (!c.ok) return bad(c.error);
+      profileUpdates.bio = c.value;
+    }
+    if (data.linkedinUrl !== undefined) {
+      const c = validateOptionalLinkedinUrl(data.linkedinUrl);
+      if (!c.ok) return bad(c.error);
+      profileUpdates.linkedinUrl = c.value;
+    }
+
+    let polesData: PoleSelection[] | null = null;
+    if (data.poles !== undefined) {
+      const c = validatePoles(data.poles);
+      if (!c.ok) return bad(c.error);
+      polesData = c.value;
+    }
+
+    let interestNames: string[] | null = null;
+    if (data.interests !== undefined) {
+      const c = validateInterestNames(data.interests);
+      if (!c.ok) return bad(c.error);
+      interestNames = c.value;
+    }
+
+    let commPrefs: Record<string, boolean> | null = null;
+    if (data.communicationPrefs !== undefined) {
+      const c = validateCommPrefs(data.communicationPrefs);
+      if (!c.ok) return bad(c.error);
+      commPrefs = c.value;
+    }
+
+    const [current] = await db
+      .select({ status: members.status })
+      .from(members)
+      .where(eq(members.id, session.memberId))
+      .limit(1);
+
+    if (!current) {
+      return NextResponse.json({ error: "Membre non trouvé" }, { status: 404 });
+    }
+
+    // ── MEMBER BASICS ────────────────────────────────────
+    // Completing onboarding (selecting poles) activates the profile.
+    if (polesData && polesData.length > 0 && ["imported", "claimed", "verified"].includes(current.status)) {
+      memberUpdates.status = "active";
+    }
 
     if (Object.keys(memberUpdates).length > 0) {
+      memberUpdates.updatedAt = new Date();
       await db.update(members).set(memberUpdates).where(eq(members.id, session.memberId));
     }
 
-    // Update or create profile
-    if (occupation !== undefined || bio !== undefined || linkedinUrl !== undefined) {
+    // ── PROFILE (upsert) ─────────────────────────────────
+    if (Object.keys(profileUpdates).length > 0) {
       const [existing] = await db
-        .select()
+        .select({ id: memberProfiles.id })
         .from(memberProfiles)
         .where(eq(memberProfiles.memberId, session.memberId))
         .limit(1);
-
-      const profileUpdates: any = {};
-      if (occupation !== undefined) profileUpdates.occupation = occupation;
-      if (bio !== undefined) profileUpdates.bio = bio;
-      if (linkedinUrl !== undefined) profileUpdates.linkedinUrl = linkedinUrl;
 
       if (existing) {
         await db
@@ -131,52 +223,86 @@ export async function PATCH(request: Request) {
       }
     }
 
-    // Update poles
-    if (polesData !== undefined && Array.isArray(polesData)) {
+    // ── POLES (replace) ──────────────────────────────────
+    if (polesData !== null) {
       await db.delete(memberPoles).where(eq(memberPoles.memberId, session.memberId));
 
-      for (const poleData of polesData) {
-        const [pole] = await db
-          .select()
+      if (polesData.length > 0) {
+        const poleRows = await db
+          .select({ id: poles.id, slug: poles.slug })
           .from(poles)
-          .where(eq(poles.slug, poleData.slug))
-          .limit(1);
+          .where(inArray(poles.slug, polesData.map((p) => p.slug)));
 
-        if (pole) {
-          await db.insert(memberPoles).values({
+        const poleIdBySlug = new Map(poleRows.map((p) => [p.slug, p.id]));
+
+        const values = polesData
+          .filter((p) => poleIdBySlug.has(p.slug))
+          .map((p) => ({
             memberId: session.memberId,
-            poleId: pole.id,
-            level: poleData.level || "beginner",
-            isPrimary: poleData.isPrimary || false,
-          });
+            poleId: poleIdBySlug.get(p.slug)!,
+            level: p.level,
+            isPrimary: p.isPrimary,
+          }));
+
+        if (values.length > 0) {
+          await db.insert(memberPoles).values(values);
         }
       }
     }
 
-    // Update interests
-    if (interestsData !== undefined && Array.isArray(interestsData)) {
+    // ── INTERESTS (replace) ──────────────────────────────
+    // Interests are matched by slug OR display name; unknown ones are
+    // created on the fly so the wizard's taxonomy keeps working.
+    if (interestNames !== null) {
       await db.delete(memberInterests).where(eq(memberInterests.memberId, session.memberId));
 
-      for (const slug of interestsData) {
-        const [interest] = await db
-          .select()
+      const insertedInterestIds: string[] = [];
+
+      for (const name of interestNames) {
+        const slug = slugifyName(name);
+        let [interest] = await db
+          .select({ id: interests.id })
           .from(interests)
-          .where(eq(interests.slug, slug))
+          .where(or(eq(interests.slug, slug), ilike(interests.name, name)))
           .limit(1);
 
-        if (interest) {
-          await db.insert(memberInterests).values({
-            memberId: session.memberId,
-            interestId: interest.id,
-          });
+        if (!interest) {
+          const created = await db
+            .insert(interests)
+            .values({ slug, name })
+            .onConflictDoNothing()
+            .returning({ id: interests.id });
+          if (created.length > 0) {
+            interest = created[0];
+          } else {
+            const [existing] = await db
+              .select({ id: interests.id })
+              .from(interests)
+              .where(eq(interests.slug, slug))
+              .limit(1);
+            interest = existing;
+          }
         }
+
+        if (interest && !insertedInterestIds.includes(interest.id)) {
+          insertedInterestIds.push(interest.id);
+        }
+      }
+
+      if (insertedInterestIds.length > 0) {
+        await db.insert(memberInterests).values(
+          insertedInterestIds.map((interestId) => ({
+            memberId: session.memberId,
+            interestId,
+          }))
+        );
       }
     }
 
-    // Update communication prefs
-    if (communicationPrefs !== undefined) {
+    // ── COMMUNICATION PREFS (upsert, whitelisted keys only) ──
+    if (commPrefs !== null) {
       const [existing] = await db
-        .select()
+        .select({ id: communicationPreferences.id })
         .from(communicationPreferences)
         .where(eq(communicationPreferences.memberId, session.memberId))
         .limit(1);
@@ -184,12 +310,12 @@ export async function PATCH(request: Request) {
       if (existing) {
         await db
           .update(communicationPreferences)
-          .set(communicationPrefs)
+          .set(commPrefs)
           .where(eq(communicationPreferences.memberId, session.memberId));
       } else {
         await db.insert(communicationPreferences).values({
           memberId: session.memberId,
-          ...communicationPrefs,
+          ...commPrefs,
         });
       }
     }

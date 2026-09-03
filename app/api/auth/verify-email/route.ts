@@ -1,15 +1,7 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { members } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import {
-  findMemberByEmail,
-  createOTPToken,
-  sendOTPEmail,
-  sendMagicLinkEmail,
-  createMagicLinkToken,
-  rateLimit,
-} from "@/lib/auth";
+import { NextResponse, after } from "next/server";
+import { findMemberByEmail, createOTPToken, sendOTPEmail, sendMagicLinkEmail, createMagicLinkToken } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,14 +11,12 @@ function isValidEmail(email: string): boolean {
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-               request.headers.get("x-real-ip") ||
-               "unknown";
+    const ip = getClientIp(request);
 
-    // IP-based rate limit: 10 requests per minute
-    if (!await rateLimit(`verify-email-ip:${ip}`, 10, 60000)) {
+    // IP-based rate limit: 3 requests per 5 minutes per IP
+    if (!await rateLimit(`verify-email:${ip}`, 3, 300000)) {
       return NextResponse.json(
-        { error: "Trop de tentatives depuis cette adresse IP" },
+        { error: "Trop de tentatives. Réessaie dans 5 minutes." },
         { status: 429 }
       );
     }
@@ -55,57 +45,51 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Méthode invalide" }, { status: 400 });
     }
 
+    // Only send code if member exists - do NOT auto-create
     const member = await findMemberByEmail(normalizedEmail);
 
-    if (member) {
-      const authMethod = method;
-
-      if (authMethod === "magic_link") {
-        const token = await createMagicLinkToken(member.id);
-        await sendMagicLinkEmail(normalizedEmail, token);
-      } else {
-        const code = await createOTPToken(member.id);
-        await sendOTPEmail(normalizedEmail, code);
-      }
-
+    if (!member) {
+      // Return the same response whether the email exists or not (timing attack mitigation)
       return NextResponse.json({
-        exists: true,
-        method: authMethod,
-        message: authMethod === "magic_link"
-          ? "Un lien magique a été envoyé à ton email"
-          : "Un code à 6 chiffres a été envoyé à ton email",
-      });
-    } else {
-      const newMember = await db
-        .insert(members)
-        .values({
-          email: normalizedEmail,
-          status: "imported",
-        })
-        .returning();
-
-      const memberId = newMember[0].id;
-
-      const authMethod = method;
-
-      if (authMethod === "magic_link") {
-        const token = await createMagicLinkToken(memberId);
-        await sendMagicLinkEmail(normalizedEmail, token);
-      } else {
-        const code = await createOTPToken(memberId);
-        await sendOTPEmail(normalizedEmail, code);
-      }
-
-      return NextResponse.json({
-        exists: false,
-        method: authMethod,
-        message: authMethod === "magic_link"
-          ? "Un lien magique a été envoyé pour créer ton profil"
-          : "Un code à 6 chiffres a été envoyé pour créer ton profil",
+        method,
+        message: "Un code a été envoyé si cet email est enregistré",
       });
     }
+
+    // Member exists: create token and send email
+    // Hand the send to after() so the platform guarantees its execution
+    // even though the response has already gone out — a bare floating promise
+    // can be frozen mid-flight on serverless runtimes.
+    if (method === "magic_link") {
+      const token = await createMagicLinkToken(member.id);
+      after(async () => {
+        try {
+          await sendMagicLinkEmail(normalizedEmail, token);
+        } catch (err) {
+          console.error("Failed to send magic link email:", err);
+        }
+      });
+    } else {
+      const code = await createOTPToken(member.id);
+      after(async () => {
+        try {
+          await sendOTPEmail(normalizedEmail, code);
+        } catch (err) {
+          console.error("Failed to send OTP email:", err);
+        }
+      });
+    }
+
+    return NextResponse.json({
+      method,
+      message: "Un code a été envoyé si cet email est enregistré",
+    });
   } catch (error) {
     console.error("verify-email error:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
 }

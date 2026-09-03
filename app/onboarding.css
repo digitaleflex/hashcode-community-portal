@@ -123,6 +123,27 @@
     margin-top: 4px;
   }
 
+  .step-item[data-short] {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .step-item.active {
+    color: var(--primary);
+  }
+
+  .step-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
   .step-item.step-active::after {
     color: var(--primary);
   }
@@ -1077,4 +1098,26 @@
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
+}
+
+/* ── MOBILE STEP INDICATOR OVERRIDES (≤640px) ─────────────── */
+@media (max-width: 640px) {
+  .step-item[data-short] {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .step-item.active {
+    color: var(--primary);
+  }
+  .step-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 24px;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
 }

@@ -566,6 +566,7 @@ a, button, input, select, textarea {
 .pole-card-premium.cloud { --pole-color: var(--accent-cloud); --pole-glow: var(--accent-cloud-glow); }
 
 /* ── ENHANCED HERO ANIMATIONS ─────────────── */
+/* NOTE: .hero-title is available for future use but currently unused */
 .hero-title {
   font-size: clamp(48px, 9vw, 96px);
   font-weight: 900;
@@ -899,6 +900,7 @@ a, button, input, select, textarea {
 .toast-premium.warning::before { background: var(--warning); }
 
 /* ── ENHANCED CODE CARD (HERO VISUAL) ─────────────── */
+/* NOTE: .code-card-premium is available for future use but currently unused */
 .code-card-premium {
   position: relative;
   padding: 32px;

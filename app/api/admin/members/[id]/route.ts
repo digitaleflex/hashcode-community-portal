@@ -30,13 +30,15 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, isAdmin } = await requireAdmin();
-  if (error) return error;
-
+  // Rate limit first: cheap IP check before the DB-backed admin lookup,
+  // so a valid admin session can't be used to bypass throttling.
   const ip = getClientIp(request);
   if (!await rateLimit(`admin:${ip}`, 60, 60000)) {
     return NextResponse.json({ error: 'Trop de requêtes, veuillez attendre.' }, { status: 429 });
   }
+
+  const { error, isAdmin } = await requireAdmin();
+  if (error) return error;
 
   const { id } = await params;
 
@@ -101,13 +103,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, isAdmin } = await requireAdmin();
-  if (error) return error;
-
+  // Rate limit first (see GET above).
   const ip = getClientIp(request);
   if (!await rateLimit(`admin:${ip}`, 20, 60000)) {
     return NextResponse.json({ error: 'Trop de requêtes, veuillez attendre.' }, { status: 429 });
   }
+
+  const { error, isAdmin } = await requireAdmin();
+  if (error) return error;
 
   const { id } = await params;
 
@@ -207,13 +210,14 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { error, isAdmin } = await requireAdmin();
-  if (error) return error;
-
+  // Rate limit first (see GET above).
   const ip = getClientIp(request);
   if (!await rateLimit(`admin:${ip}`, 20, 60000)) {
     return NextResponse.json({ error: 'Trop de requêtes, veuillez attendre.' }, { status: 429 });
   }
+
+  const { error, isAdmin } = await requireAdmin();
+  if (error) return error;
 
   const { id } = await params;
 

@@ -33,48 +33,52 @@ export async function GET() {
   }
 
   try {
-    const [member] = await db
-      .select()
-      .from(members)
-      .where(eq(members.id, session.memberId))
-      .limit(1);
+    const [memberRows, profileRows, memberPolesList, memberInterestsList, prefsRows] = await Promise.all([
+      db
+        .select()
+        .from(members)
+        .where(eq(members.id, session.memberId))
+        .limit(1),
+      db
+        .select()
+        .from(memberProfiles)
+        .where(eq(memberProfiles.memberId, session.memberId))
+        .limit(1),
+      db
+        .select({
+          id: memberPoles.poleId,
+          level: memberPoles.level,
+          isPrimary: memberPoles.isPrimary,
+          pole: poles,
+        })
+        .from(memberPoles)
+        .innerJoin(poles, eq(poles.id, memberPoles.poleId))
+        .where(eq(memberPoles.memberId, session.memberId)),
+      db
+        .select({
+          id: interests.id,
+          slug: interests.slug,
+          name: interests.name,
+        })
+        .from(memberInterests)
+        .innerJoin(interests, eq(interests.id, memberInterests.interestId))
+        .where(eq(memberInterests.memberId, session.memberId)),
+      db
+        .select()
+        .from(communicationPreferences)
+        .where(eq(communicationPreferences.memberId, session.memberId))
+        .limit(1),
+    ]);
+
+    const [member] = memberRows;
 
     if (!member) {
       return NextResponse.json({ error: "Membre non trouvé" }, { status: 404 });
     }
 
-    const [profile] = await db
-      .select()
-      .from(memberProfiles)
-      .where(eq(memberProfiles.memberId, session.memberId))
-      .limit(1);
+    const [profile] = profileRows;
 
-    const memberPolesList = await db
-      .select({
-        id: memberPoles.poleId,
-        level: memberPoles.level,
-        isPrimary: memberPoles.isPrimary,
-        pole: poles,
-      })
-      .from(memberPoles)
-      .innerJoin(poles, eq(poles.id, memberPoles.poleId))
-      .where(eq(memberPoles.memberId, session.memberId));
-
-    const memberInterestsList = await db
-      .select({
-        id: interests.id,
-        slug: interests.slug,
-        name: interests.name,
-      })
-      .from(memberInterests)
-      .innerJoin(interests, eq(interests.id, memberInterests.interestId))
-      .where(eq(memberInterests.memberId, session.memberId));
-
-    const [prefs] = await db
-      .select()
-      .from(communicationPreferences)
-      .where(eq(communicationPreferences.memberId, session.memberId))
-      .limit(1);
+    const [prefs] = prefsRows;
 
     return NextResponse.json({
       member,

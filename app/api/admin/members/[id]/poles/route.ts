@@ -81,19 +81,21 @@ export async function POST(
       return NextResponse.json({ error: 'Pôle introuvable' }, { status: 404 });
     }
 
-    // Optionnel : s'assurer qu'il n'y a qu'un seul pôle primaire par membre
-    if (isPrimary) {
-      await db
-        .update(memberPoles)
-        .set({ isPrimary: false })
-        .where(inArray(memberPoles.memberId, [id]));
-    }
+    await db.transaction(async (tx) => {
+      // Optionnel : s'assurer qu'il n'y a qu'un seul pôle primaire par membre
+      if (isPrimary) {
+        await tx
+          .update(memberPoles)
+          .set({ isPrimary: false })
+          .where(inArray(memberPoles.memberId, [id]));
+      }
 
-    await db.insert(memberPoles).values({
-      memberId: id,
-      poleId,
-      level: (level as typeof LEVELS[number]) || 'beginner',
-      isPrimary: isPrimary ?? false,
+      await tx.insert(memberPoles).values({
+        memberId: id,
+        poleId,
+        level: (level as typeof LEVELS[number]) || 'beginner',
+        isPrimary: isPrimary ?? false,
+      });
     });
 
     return NextResponse.json({ success: true });

@@ -323,6 +323,7 @@ export const memberPoints = pgTable(
   (table) => [
     index("member_points_member_idx").on(table.memberId),
     index("member_points_points_idx").on(table.points),
+    index("member_points_points_desc_idx").on(table.points.desc()),
   ]
 );
 

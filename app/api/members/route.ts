@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { members, memberPoles, poles } from '@/lib/db/schema';
 import { eq, ilike, or, and, count, inArray, desc } from 'drizzle-orm';
-import { rateLimit } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/request';
 
 // Public member directory. Only members who engaged with the community are

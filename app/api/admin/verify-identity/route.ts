@@ -115,40 +115,43 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Membre non trouvé' }, { status: 404 });
     }
 
-    const existing = await db
-      .select()
-      .from(memberVerifications)
-      .where(eq(memberVerifications.memberId, memberId))
-      .limit(1);
-
     const now = new Date();
     const trustScore = computeTrustScore(flags);
 
-    let saved;
-    if (existing.length === 0) {
-      [saved] = await db
-        .insert(memberVerifications)
-        .values({
-          memberId,
-          ...flags,
-          verifiedBy: session!.memberId,
-          verifiedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-    } else {
-      [saved] = await db
-        .update(memberVerifications)
-        .set({
-          ...flags,
-          verifiedBy: session!.memberId,
-          verifiedAt: now,
-          updatedAt: now,
-        })
+    const saved = await db.transaction(async (tx) => {
+      const existing = await tx
+        .select()
+        .from(memberVerifications)
         .where(eq(memberVerifications.memberId, memberId))
-        .returning();
-    }
+        .limit(1);
+
+      let row;
+      if (existing.length === 0) {
+        [row] = await tx
+          .insert(memberVerifications)
+          .values({
+            memberId,
+            ...flags,
+            verifiedBy: session!.memberId,
+            verifiedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+      } else {
+        [row] = await tx
+          .update(memberVerifications)
+          .set({
+            ...flags,
+            verifiedBy: session!.memberId,
+            verifiedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(memberVerifications.memberId, memberId))
+          .returning();
+      }
+      return row;
+    });
 
     return NextResponse.json({
       verification: { ...saved, trustScore },

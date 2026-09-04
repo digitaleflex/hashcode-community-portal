@@ -7,10 +7,48 @@ import { useRouter } from 'next/navigation'
 import { fetchCommunityStats, type CommunityStats } from '@/lib/client-stats'
 import { poleIcon, poleLabel, levelLabel, getInitials } from '@/lib/display'
 
+interface PublicMemberSummary {
+  id?: string
+  firstName?: string | null
+  lastName?: string | null
+  city?: string | null
+  country?: string | null
+  status?: string | null
+  createdAt?: string | null
+}
+
+interface PublicMemberProfile {
+  bio?: string | null
+  linkedinUrl?: string | null
+  occupation?: string | null
+  timeAvailable?: number | null
+}
+
+interface PublicMemberPole {
+  pole?: {
+    id?: string
+    slug?: string | null
+  } | null
+  level: string
+  isPrimary?: boolean | null
+}
+
+interface PublicMemberInterest {
+  id: string
+  name?: string | null
+}
+
+interface PublicMemberData {
+  member: PublicMemberSummary
+  profile?: PublicMemberProfile | null
+  poles?: PublicMemberPole[] | null
+  interests?: PublicMemberInterest[] | null
+}
+
 export default function PublicProfilePage() {
   const params = useParams()
   const router = useRouter()
-  const [member, setMember] = useState<any>(null)
+  const [member, setMember] = useState<PublicMemberData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<CommunityStats | null>(null)
@@ -187,7 +225,7 @@ export default function PublicProfilePage() {
             <section style={{ marginBottom: '32px' }}>
               <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Pôles HASHCODE</h2>
               <div className="pole-list">
-                {poles.map((p: any, idx: number) => (
+                {poles.map((p: PublicMemberPole, idx: number) => (
                   <div key={p.pole?.id || idx} className="pole-row" style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -228,7 +266,7 @@ export default function PublicProfilePage() {
             <section style={{ marginBottom: '32px' }}>
               <h2 style={{ fontSize: '20px', marginBottom: '16px' }}>Centres d'intérêt</h2>
               <div className="tags">
-                {interests.map((i: any) => (
+                {interests.map((i: PublicMemberInterest) => (
                   <span key={i.id} className="tag">{i.name}</span>
                 ))}
               </div>

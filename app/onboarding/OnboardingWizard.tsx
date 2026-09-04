@@ -7,6 +7,19 @@ import { validators } from '@/lib/validation'
 import { toast } from '@/components/Toast'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 
+interface PoleOption {
+  level: string
+  pole: {
+    slug: string
+  }
+}
+
+interface InterestOption {
+  interest: {
+    name: string
+  }
+}
+
 interface OnboardingData {
   email: string
   firstName: string
@@ -210,11 +223,11 @@ export default function OnboardingWizard() {
             linkedinUrl: p.linkedinUrl || '',
             occupation: p.occupation || 'student',
             bio: p.bio || '',
-            poles: memberInfo.poles?.map((pole: any) => ({
+            poles: memberInfo.poles?.map((pole: PoleOption) => ({
               slug: pole.pole.slug,
               level: pole.level,
             })) || [],
-            interests: memberInfo.interests?.map((i: any) => i.interest.name) || [],
+            interests: memberInfo.interests?.map((i: InterestOption) => i.interest.name) || [],
           }))
         }
         if (memberInfo?.communicationPrefs) {

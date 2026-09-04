@@ -1,5 +1,7 @@
 import * as xlsx from "xlsx";
 
+export type ExcelRow = unknown[];
+
 export interface ColumnMapping {
   email?: string;
   firstName?: string;
@@ -16,7 +18,7 @@ export interface MemberImportRow {
   country: string;
   status: string;
   gender: string | null;
-  any: Record<string, any>;
+  any: Record<string, unknown>;
 }
 
 export interface ImportPreview {
@@ -40,18 +42,18 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
 
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
-  const data = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+  const data = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as ExcelRow[];
 
   if (data.length === 0) {
     return { headers: [], rows: [] };
   }
 
-  const headers = data[0].map((h: any) => String(h || "").trim());
+  const headers = data[0].map((h: unknown) => String(h || "").trim());
 
   const rows: MemberImportRow[] = [];
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    const obj: Record<string, any> = {};
+    const obj: Record<string, unknown> = {};
     for (let j = 0; j < headers.length; j++) {
       obj[headers[j]] = j < row.length ? row[j] : "";
     }
@@ -79,6 +81,23 @@ export async function parseImportFile(file: File): Promise<ImportPreview> {
     headers,
     rows: rows.slice(0, 20),
   };
+}
+
+/**
+ * Extract a cell value from an Excel row using a column mapping.
+ * Returns '' when the mapping has no column for the requested field.
+ */
+export function extractColumnValue(
+  row: ExcelRow,
+  mapping: ColumnMapping,
+  field: keyof ColumnMapping,
+  headerNames: string[]
+): unknown {
+  const columnName = mapping[field];
+  if (!columnName) return '';
+  const idx = headerNames.indexOf(columnName);
+  if (idx >= 0) return row[idx];
+  return (row as unknown as Record<string, unknown>)[columnName];
 }
 
 /**

@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { members, communicationPreferences, communityHistory, memberProfiles } from '@/lib/db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth';
-import { parseImportFile, normalizeGender } from '@/lib/import-excel';
+import { parseImportFile, normalizeGender, extractColumnValue, type ExcelRow } from '@/lib/import-excel';
 import * as xlsx from 'xlsx';
 import { rateLimit } from '@/lib/rate-limit';
 import { validateOptionalEnum, MEMBER_STATUSES } from '@/lib/server-validation';
@@ -35,13 +35,6 @@ type ImportResult = {
   updatedCount: number;
   errors: Array<{ row: number; message: string }>;
 };
-
-function extractColumnValue(row: any, mapping: ColumnMapping, field: keyof ColumnMapping, headerNames: string[]): any {
-  const columnName = mapping[field];
-  if (!columnName) return '';
-  const idx = headerNames.indexOf(columnName);
-  return idx >= 0 ? row[idx] : row[columnName];
-}
 
 function normalizeEmail(email: string): string {
   return String(email || '').trim().toLowerCase();
@@ -107,7 +100,7 @@ export async function POST(request: Request) {
     const workbook = xlsx.read(arrayBuffer, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const allData = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+    const allData = xlsx.utils.sheet_to_json(worksheet, { header: 1 }) as ExcelRow[];
     
     if (allData.length <= 1) {
       return NextResponse.json({
@@ -119,7 +112,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const headers = allData[0].map((h: any) => String(h || "").trim());
+    const headers = allData[0].map((h: unknown) => String(h || "").trim());
     const rows = allData.slice(1);
 
     // Process rows
@@ -144,7 +137,7 @@ export async function POST(request: Request) {
     // ── PHASE 1 — Validate and prepare all rows ──────────
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      const email = normalizeEmail(extractColumnValue(row, mapping, 'email', headers));
+      const email = normalizeEmail(extractColumnValue(row, mapping, 'email', headers) as string);
 
       if (!email || !email.includes('@')) {
         errors.push({ row: i + 2, message: `Ligne ${i + 2}: Email invalide` });
@@ -156,9 +149,9 @@ export async function POST(request: Request) {
       }
       processedEmails.add(email);
 
-      const firstName = normalizeName(extractColumnValue(row, mapping, 'firstName', headers));
-      const lastName = normalizeName(extractColumnValue(row, mapping, 'lastName', headers));
-      const country = extractColumnValue(row, mapping, 'country', headers) || undefined;
+      const firstName = normalizeName(extractColumnValue(row, mapping, 'firstName', headers) as string);
+      const lastName = normalizeName(extractColumnValue(row, mapping, 'lastName', headers) as string);
+      const country = (extractColumnValue(row, mapping, 'country', headers) as string) || undefined;
       const rawStatus = extractColumnValue(row, mapping, 'status', headers) || 'imported';
       const rawGender = extractColumnValue(row, mapping, 'gender', headers);
       const gender = normalizeGender(rawGender);

@@ -5,8 +5,8 @@ import { getJwtSecret } from '@/lib/edge-auth'
 
 const jwtSecret = getJwtSecret()
 
-export async function middleware(request: NextRequest) {
-  const token = request.cookies.get('session')?.value
+export default async function proxy(request: NextRequest) {
+  const token = request.cookies.get('hashcode_session')?.value
   if (!token) {
     // Allow public paths
     const publicPaths = ['/', '/auth', '/api/auth', '/api/members', '/api/stats', '/members', '/m', '/manifest.json']
@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } })
   } catch {
     const response = NextResponse.redirect(new URL('/auth/verify', request.url))
-    response.cookies.delete('session')
+    response.cookies.delete('hashcode_session')
     return response
   }
 }

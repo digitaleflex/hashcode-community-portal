@@ -2,12 +2,7 @@ import { NextResponse, after } from "next/server";
 import { findMemberByEmail, createOTPToken, sendOTPEmail, sendMagicLinkEmail, createMagicLinkToken } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request";
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function isValidEmail(email: string): boolean {
-  return EMAIL_REGEX.test(email) && email.length <= 254;
-}
+import { sanitizeEmail } from "@/lib/email-lookup";
 
 export async function POST(request: Request) {
   try {
@@ -23,15 +18,13 @@ export async function POST(request: Request) {
 
     const { email, method } = await request.json();
 
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "Email requis" }, { status: 400 });
+    const result = sanitizeEmail(email);
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!isValidEmail(normalizedEmail)) {
-      return NextResponse.json({ error: "Email invalide" }, { status: 400 });
-    }
+    const normalizedEmail = result.email;
 
     // Email-based rate limit: 3 requests per 5 minutes per email
     if (!await rateLimit(`verify-email:${normalizedEmail}`, 3, 300000)) {

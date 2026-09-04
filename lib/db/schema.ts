@@ -274,6 +274,26 @@ export const authTokensRelations = relations(authTokens, ({ one }) => ({
   }),
 }));
 
+// ── REVOKED SESSIONS (blacklist JWT — audit 3.5) ───────────
+// Un jti révoqué = session invalide même si la signature JWT est
+// encore valide. Les lignes sont périssables : expiresAt reprend la
+// durée de vie du token au moment de la révocation (purge possible
+// via DELETE WHERE expiresAt < now()).
+
+export const revokedSessions = pgTable(
+  "revoked_sessions",
+  {
+    jti: varchar("jti", { length: 64 }).primaryKey(),
+    memberId: uuid("member_id").references(() => members.id, { onDelete: "cascade" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("revoked_sessions_member_idx").on(table.memberId),
+    index("revoked_sessions_expires_idx").on(table.expiresAt),
+  ]
+);
+
 // ── MEMBER VERIFICATIONS ────────────────────────────────
 
 export const memberVerifications = pgTable(

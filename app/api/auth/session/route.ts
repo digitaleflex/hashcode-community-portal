@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSession, clearSessionCookie } from "@/lib/auth";
+import { getSession, clearSessionCookie, revokeSession } from "@/lib/auth";
 
 export async function GET() {
   const session = await getSession();
@@ -20,6 +20,16 @@ export async function GET() {
 }
 
 export async function DELETE() {
+  // Audit 3.5 : révoque le jti courant (blacklist) avant de supprimer le
+  // cookie, sinon un token volé resterait valide 7 jours après logout.
+  const session = await getSession();
+  if (session?.jti) {
+    try {
+      await revokeSession(session.memberId, session.jti);
+    } catch (error) {
+      console.error("revokeSession error:", error);
+    }
+  }
   await clearSessionCookie();
   return NextResponse.json({ success: true });
 }

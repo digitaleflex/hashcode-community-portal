@@ -1,8 +1,9 @@
 import { SignJWT, jwtVerify } from "jose";
+import { randomUUID } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { db } from "./db";
-import { authTokens, members } from "./db/schema";
+import { authTokens, members, revokedSessions } from "./db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { Resend } from "resend";
 import { generateOTP, generateMagicToken, hashToken } from "./crypto";
@@ -28,20 +29,50 @@ export { distributedRateLimit as rateLimit };
 // ── JWT SESSION ──────────────────────────────────────────
 
 export async function createSessionToken(memberId: string, email: string): Promise<string> {
-  return new SignJWT({ memberId, email })
+  const jti = randomUUID();
+  return new SignJWT({ memberId, email, jti })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
+    .setJti(jti)
     .setExpirationTime(`${SESSION_DURATION}s`)
     .sign(JWT_SECRET);
 }
 
-export async function verifySessionToken(token: string): Promise<{ memberId: string; email: string } | null> {
+export async function verifySessionToken(token: string): Promise<{ memberId: string; email: string; jti?: string } | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
-    return { memberId: payload.memberId as string, email: payload.email as string };
+    const jti = payload.jti as string | undefined;
+    if (jti) {
+      // Audit 3.5 : blacklist — un token révoqué (logout) est rejeté
+      // même si sa signature est encore valide.
+      const revoked = await db
+        .select({ jti: revokedSessions.jti })
+        .from(revokedSessions)
+        .where(eq(revokedSessions.jti, jti))
+        .limit(1);
+      if (revoked.length > 0) return null;
+    }
+    // Pas de jti = token émis avant l'audit 3.5 → accepté jusqu'à expiration naturelle.
+    return { memberId: payload.memberId as string, email: payload.email as string, jti };
   } catch {
     return null;
   }
+}
+
+// ── SESSION REVOCATION (blacklist JWT — audit 3.5) ─────────
+// Révoque un token par son jti (idempotent : double logout = no-op).
+// expiresAt reprend la durée de vie max d'un token pour permettre la purge.
+
+export async function revokeSession(memberId?: string, jti?: string): Promise<void> {
+  if (!jti) return;
+  await db
+    .insert(revokedSessions)
+    .values({
+      jti,
+      memberId: memberId ?? null,
+      expiresAt: new Date(Date.now() + SESSION_DURATION * 1000),
+    })
+    .onConflictDoNothing();
 }
 
 export async function getSession() {

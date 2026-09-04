@@ -4,15 +4,7 @@ import { db } from "@/lib/db";
 import { members } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { rateLimit } from "@/lib/auth";
-
-// ── SIMPLE VALIDATION ─────────────────────────────────
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254
-}
-
-function sanitizeEmail(email: string): string {
-  return email.trim().toLowerCase()
-}
+import { sanitizeEmail } from "@/lib/email-lookup";
 
 export async function POST(request: Request) {
   try {
@@ -31,15 +23,13 @@ export async function POST(request: Request) {
     // ── VALIDATION ─────────────────────────────────────
     const { email } = await request.json();
 
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ error: "Email requis" }, { status: 400 });
+    const result = sanitizeEmail(email);
+
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    const sanitizedEmail = sanitizeEmail(email)
-
-    if (!isValidEmail(sanitizedEmail)) {
-      return NextResponse.json({ error: "Email invalide" }, { status: 400 });
-    }
+    const sanitizedEmail = result.email;
 
     // ── 3.8: réponse uniforme — ne révèle pas l'existence du compte ──
     // Lookup conservé (résultat ignoré) pour uniformiser le timing.

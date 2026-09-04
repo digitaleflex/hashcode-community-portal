@@ -73,11 +73,11 @@ export default function PointsPage() {
     const amount = amounts[memberId] ?? Math.abs(delta);
 
     if (!reason) {
-      window.alert('Veuillez entrer une raison.');
+      setError('Veuillez entrer une raison.');
       return;
     }
     if (!amount || amount <= 0) {
-      window.alert('Veuillez entrer un montant valide.');
+      setError('Veuillez entrer un montant valide.');
       return;
     }
 
@@ -97,10 +97,10 @@ export default function PointsPage() {
         await fetchData();
       } else {
         const err = await res.json();
-        window.alert(err.error || 'Erreur lors de la mise à jour');
+        setError(err.error || 'Erreur lors de la mise à jour');
       }
     } catch {
-      window.alert('Erreur réseau');
+      setError('Erreur réseau');
     } finally {
       setSubmitting((prev) => ({ ...prev, [memberId]: false }));
     }

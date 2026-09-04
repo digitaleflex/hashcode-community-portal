@@ -164,8 +164,8 @@ export default function AnalyticsPage() {
     );
   }
 
-  const maxPoleCount = Math.max(...(data?.polesDistribution.map((p) => p.count) || [1]));
-  const maxMonthlyCount = Math.max(...(data?.membersByMonth.map((m) => m.count) || [1]));
+  const maxPoleCount = Math.max(1, ...(data?.polesDistribution?.map((p) => p.count) ?? []));
+  const maxMonthlyCount = Math.max(1, ...(data?.membersByMonth?.map((m) => m.count) ?? []));
 
   return (
     <div className="page-with-sidebar">

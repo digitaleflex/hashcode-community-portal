@@ -79,6 +79,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Audit 3.4 — le Content-Type client est contournable : vérifie la signature réelle (magic bytes).
+    // Lu une seule fois ici, réutilisé plus bas pour xlsx.read.
+    const arrayBuffer = await file.arrayBuffer();
+    const headerBytes = new Uint8Array(arrayBuffer.slice(0, 4));
+    const isZipSignature =
+      headerBytes.length >= 2 && headerBytes[0] === 0x50 && headerBytes[1] === 0x4b;
+    const hasNullByte = headerBytes.some((b) => b === 0x00);
+    if (!isZipSignature && hasNullByte) {
+      return NextResponse.json(
+        { success: false, error: 'Signature de fichier invalide ou suspecte' },
+        { status: 415 }
+      );
+    }
+
     // Parse the file to get preview
     const preview = await parseImportFile(file);
 
@@ -95,8 +109,7 @@ export async function POST(request: Request) {
 
     const mapping: ColumnMapping = JSON.parse(mappingStr);
 
-    // Read all rows from the file
-    const arrayBuffer = await file.arrayBuffer();
+    // Read all rows from the file (réutilise l'arrayBuffer déjà lu pour la vérification de signature)
     const workbook = xlsx.read(arrayBuffer, { type: 'array' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];

@@ -3,14 +3,14 @@ import { generateOTP, generateMagicToken, hashToken } from '../../lib/crypto';
 
 describe('Auth Utilities', () => {
   describe('generateOTP', () => {
-    it('should generate a 6-digit OTP', () => {
+    it('should generate a 8-digit OTP', () => {
       const otp = generateOTP();
-      expect(otp).toHaveLength(6);
-      expect(/^\d{6}$/.test(otp)).toBe(true);
+      expect(otp).toHaveLength(8);
+      expect(/^\d{8}$/.test(otp)).toBe(true);
     });
 
     it('should generate different OTPs across many calls', () => {
-      // A single pair collides with probability 1e-6; over 200 draws a run of
+      // A single pair collides with probability 1e-8; over 200 draws a run of
       // identical codes would be astronomically unlikely, making the test stable.
       const otps = new Set(Array.from({ length: 200 }, () => generateOTP()));
       expect(otps.size).toBeGreaterThan(1);

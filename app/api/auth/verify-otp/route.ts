@@ -16,7 +16,7 @@ function isValidEmail(email: string): boolean {
 }
 
 function isValidOTP(code: string): boolean {
-  return /^\d{6}$/.test(code)
+  return /^\d{8}$/.test(code)
 }
 
 function sanitizeEmail(email: string): string {
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     }
 
     if (!isValidOTP(code)) {
-      return NextResponse.json({ error: "Le code doit être 6 chiffres" }, { status: 400 })
+      return NextResponse.json({ error: "Le code doit être 8 chiffres" }, { status: 400 })
     }
 
     // ── RATE LIMITING (per email) ─────────────────────

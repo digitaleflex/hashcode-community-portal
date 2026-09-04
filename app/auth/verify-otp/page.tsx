@@ -39,7 +39,7 @@ export default function AuthVerifyOTP() {
 
   // Auto-submit when code is complete
   useEffect(() => {
-    if (code.length === 6 && !isVerifying && !loading) {
+    if (code.length === 8 && !isVerifying && !loading) {
       handleVerify()
     }
   }, [code, isVerifying, loading])
@@ -89,8 +89,8 @@ export default function AuthVerifyOTP() {
     const pastedText = e.clipboardData?.getData('text') || ''
     const digitsOnly = pastedText.replace(/\D/g, '')
 
-    if (digitsOnly.length === 6) {
-      for (let i = 0; i < 6; i++) {
+    if (digitsOnly.length === 8) {
+      for (let i = 0; i < 8; i++) {
         const input = inputRefs.current[i]
         if (input) {
           input.value = digitsOnly[i]
@@ -98,24 +98,24 @@ export default function AuthVerifyOTP() {
         }
       }
       setCode(digitsOnly)
-      inputRefs.current[5]?.focus()
+      inputRefs.current[7]?.focus()
       return
     }
 
-    for (let i = 0; i < Math.min(digitsOnly.length, 6 - index); i++) {
+    for (let i = 0; i < Math.min(digitsOnly.length, 8 - index); i++) {
       const input = inputRefs.current[index + i]
       if (input) {
         input.value = digitsOnly[i]
         input.dispatchEvent(new Event('input', { bubbles: true }))
       }
     }
-    const newIndex = Math.min(index + digitsOnly.length, 5)
+    const newIndex = Math.min(index + digitsOnly.length, 7)
     inputRefs.current[newIndex]?.focus()
   }
 
   const handleCodeChange = (index: number, value: string) => {
     const newCode = value.replace(/\D/g, '')
-    if (newCode.length === 1 && index < 5) {
+    if (newCode.length === 1 && index < 7) {
       inputRefs.current[index + 1]?.focus()
     }
 
@@ -136,7 +136,7 @@ export default function AuthVerifyOTP() {
   }
 
   const handleVerify = async () => {
-    if (!email || code.length !== 6) return
+    if (!email || code.length !== 8) return
 
     setIsVerifying(true)
     setLoading(true)
@@ -252,7 +252,7 @@ export default function AuthVerifyOTP() {
               <h1>Code de vérification</h1>
             </div>
             <p className="verify-otp-text">
-              Nous avons envoyé un code à 6 chiffres à l'adresse <strong>{email || '...'}</strong>.
+              Nous avons envoyé un code à 8 chiffres à l'adresse <strong>{email || '...'}</strong>.
               Vérifiez votre boîte de réception (et le dossier spam).
             </p>
 
@@ -274,9 +274,9 @@ export default function AuthVerifyOTP() {
             )}
 
             <form onSubmit={handleSubmit} className="verify-form">
-              <label className="form-label">Code à 6 chiffres</label>
+              <label className="form-label">Code à 8 chiffres</label>
               <div className="otp-inputs">
-                {[0, 1, 2, 3, 4, 5].map((index) => (
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
                   <input
                     key={index}
                     ref={(el) => { inputRefs.current[index] = el; }}
@@ -303,7 +303,7 @@ export default function AuthVerifyOTP() {
               <button
                 type="submit"
                 className="primary-button w-full"
-                disabled={loading || code.length !== 6}
+                disabled={loading || code.length !== 8}
               >
                 {loading ? (
                   <span className="button-loading">

@@ -433,7 +433,7 @@ export default function AdminImportPage() {
               <button
                 type="button"
                 onClick={handleSubmitWithMapping}
-                disabled={loading}
+                disabled={loading || !preview}
                 style={{
                   padding: '8px 16px',
                   background: 'var(--primary)',

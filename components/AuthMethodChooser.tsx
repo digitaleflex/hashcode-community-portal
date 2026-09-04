@@ -21,7 +21,7 @@ const descriptions = {
 }
 
 const labels = {
-  otp: 'Code à 6 chiffres',
+  otp: 'Code à 8 chiffres',
   magic_link: 'Lien magique',
 }
 

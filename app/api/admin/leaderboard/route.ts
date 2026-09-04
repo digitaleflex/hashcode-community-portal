@@ -30,7 +30,7 @@ export async function GET(request: Request) {
       .from(members)
       .leftJoin(memberPoints, eq(members.id, memberPoints.memberId))
       .orderBy(desc(sql`COALESCE(${memberPoints.points}, 0)`))
-      .limit(20);
+      .limit(100);
 
     return NextResponse.json({
       leaderboard: leaderboard.map((m, idx) => ({

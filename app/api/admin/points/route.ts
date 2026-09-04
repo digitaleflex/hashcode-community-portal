@@ -28,6 +28,18 @@ export async function GET(request: Request) {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const rawPage = parseInt(searchParams.get('page') ?? '1', 10);
+    const rawLimit = parseInt(searchParams.get('limit') ?? '50', 10);
+    const page = Number.isNaN(rawPage) || rawPage < 1 ? 1 : Math.floor(rawPage);
+    const limit = Number.isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(100, Math.floor(rawLimit));
+    const offset = (page - 1) * limit;
+
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(members);
+    const total = Number(totalResult[0]?.count ?? 0);
+
     const membersWithPoints = await db
       .select({
         id: members.id,
@@ -39,7 +51,9 @@ export async function GET(request: Request) {
       })
       .from(members)
       .leftJoin(memberPoints, eq(members.id, memberPoints.memberId))
-      .orderBy(desc(sql`COALESCE(${memberPoints.points}, 0)`));
+      .orderBy(desc(sql`COALESCE(${memberPoints.points}, 0)`))
+      .limit(limit)
+      .offset(offset);
 
     return NextResponse.json({
       members: membersWithPoints.map((m) => ({
@@ -50,6 +64,9 @@ export async function GET(request: Request) {
         points: Number(m.points),
         level: m.level,
       })),
+      page,
+      limit,
+      total,
     });
   } catch (error) {
     console.error('GET /api/admin/points error:', error);

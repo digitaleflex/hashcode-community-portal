@@ -3,10 +3,13 @@
 // NEVER commit real secrets here — use placeholders only.
 
 process.env.JWT_SECRET = 'test-jwt-secret-must-be-at-least-32-chars-long-xxxxx';
-Object.defineProperty(process.env, 'NODE_ENV', { value: 'test', writable: true });
+// NOTE: NODE_ENV is already 'test' under vitest — do not redefine it
+// (Object.defineProperty on process.env throws on recent Node versions).
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
-process.env.UPSTASH_REDIS_REST_URL = 'https://test.upstash.io';
-process.env.UPSTASH_REDIS_REST_TOKEN = 'test-upstash-token';
+// NOTE: leave Redis unconfigured so lib/rate-limit.ts uses its in-memory
+// fallback. A bogus URL would make tests hit the network and time out.
+process.env.UPSTASH_REDIS_REST_URL = '';
+process.env.UPSTASH_REDIS_REST_TOKEN = '';
 process.env.KV_REST_API_URL = '';
 process.env.KV_REST_API_TOKEN = '';
 process.env.RESEND_API_KEY = 're_test_1234567890abcdef';

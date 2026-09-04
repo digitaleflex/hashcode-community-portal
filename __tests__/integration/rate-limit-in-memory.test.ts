@@ -27,8 +27,8 @@ describe('Rate Limiting', () => {
   });
 
   it('should use different keys independently', async () => {
-    const key1 = `test独立1-${Date.now()}`;
-    const key2 = `test独立2-${Date.now()}`;
+    const key1 = `test-key1-${Date.now()}`;
+    const key2 = `test-key2-${Date.now()}`;
     
     // Exhaust key1
     await rateLimit(key1, 2, 60000);

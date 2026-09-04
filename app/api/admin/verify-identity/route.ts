@@ -8,12 +8,7 @@ import { validateUUID } from '@/lib/server-validation';
 import { rateLimit } from '@/lib/rate-limit';
 
 import { getClientIp } from '@/lib/request';
-
-const FLAG_KEYS = ['emailVerified', 'linkedinVerified', 'identityVerified', 'contributor'] as const;
-
-function computeTrustScore(row: { emailVerified: boolean; linkedinVerified: boolean; identityVerified: boolean; contributor: boolean }): number {
-  return FLAG_KEYS.reduce((acc, k) => acc + (row[k] ? 1 : 0), 0);
-}
+import { computeTrustScore, TRUST_FLAG_KEYS } from '@/lib/trust';
 
 export async function GET(request: Request) {
   const { error, isAdmin } = await requireAdmin();
@@ -73,7 +68,12 @@ export async function GET(request: Request) {
       },
       verification: {
         ...verification,
-        trustScore: computeTrustScore(verification as any),
+        trustScore: computeTrustScore({
+          emailVerified: verification.emailVerified ?? false,
+          linkedinVerified: verification.linkedinVerified ?? false,
+          identityVerified: verification.identityVerified ?? false,
+          contributor: verification.contributor ?? false,
+        }),
       },
     });
   } catch (err) {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'memberId invalide' }, { status: 400 });
     }
 
-    const flags: Record<(typeof FLAG_KEYS)[number], boolean> = {
+    const flags: Record<(typeof TRUST_FLAG_KEYS)[number], boolean> = {
       emailVerified: body.emailVerified === true,
       linkedinVerified: body.linkedinVerified === true,
       identityVerified: body.identityVerified === true,

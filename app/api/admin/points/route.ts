@@ -8,8 +8,7 @@ import { validateUUID } from '@/lib/server-validation';
 import { rateLimit } from '@/lib/rate-limit';
 
 import { getClientIp } from '@/lib/request';
-
-type Level = 'Novice' | 'Intermediate' | 'Advanced' | 'Legend';
+import type { Level } from '@/lib/types';
 
 function calculateLevel(points: number): Level {
   if (points >= 300) return 'Legend';

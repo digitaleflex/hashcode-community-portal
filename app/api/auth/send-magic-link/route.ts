@@ -39,7 +39,10 @@ export async function POST(request: Request) {
     const member = await findMemberByEmail(normalizedEmail);
 
     if (!member) {
+      // 3.9: délai artificiel pour uniformiser le temps de réponse
+      // (le chemin "membre trouvé" crée un token avant de répondre).
       // Don't reveal whether email exists
+      await new Promise((resolve) => setTimeout(resolve, 700));
       return NextResponse.json({
         ok: true,
         message: "Si ton email est dans notre base, un lien a été envoyé.",

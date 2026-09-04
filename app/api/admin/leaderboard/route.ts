@@ -7,6 +7,7 @@ import { requireAdmin } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 
 import { getClientIp } from '@/lib/request';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: Request) {
   const { error, isAdmin } = await requireAdmin();
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
-    console.error('GET /api/admin/leaderboard error:', error);
+    logger.error({ err: error }, 'GET /api/admin/leaderboard error');
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

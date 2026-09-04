@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Award, ArrowLeft, Plus, Minus, RotateCw } from 'lucide-react';
+import type { Level } from '@/lib/types';
 
 type Member = {
   id: string;
@@ -10,10 +11,10 @@ type Member = {
   firstName: string | null;
   lastName: string | null;
   points: number;
-  level: 'Novice' | 'Intermediate' | 'Advanced' | 'Legend';
+  level: Level;
 };
 
-const LEVEL_COLORS: Record<Member['level'], string> = {
+const LEVEL_COLORS: Record<Level, string> = {
   Novice: '#94a3b8',
   Intermediate: '#3b82f6',
   Advanced: '#a855f7',

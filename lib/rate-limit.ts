@@ -84,7 +84,7 @@ export async function rateLimit(
   max: number = 3,
   windowMs: number = 60000
 ): Promise<boolean> {
-  if (process.env.NODE_ENV === 'production' && !process.env.UPSTASH_REDIS_REST_API_URL && !process.env.KV_REST_API_URL) {
+  if (process.env.NODE_ENV === 'production' && !process.env.UPSTASH_REDIS_REST_URL && !process.env.KV_REST_API_URL) {
     throw new Error('Redis is required in production. Set UPSTASH_REDIS_REST_URL/TOKEN or KV_REST_API_URL/TOKEN.');
   }
 

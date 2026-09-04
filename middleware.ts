@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
-import { getJwtSecret } from '@/lib/auth'
+import { getJwtSecret } from '@/lib/edge-auth'
 
 const jwtSecret = getJwtSecret()
 

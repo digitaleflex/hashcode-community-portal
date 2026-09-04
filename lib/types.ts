@@ -24,3 +24,7 @@ export const UpdateMemberSchema = z.object({
 
 export type CreateMemberInput = z.infer<typeof CreateMemberSchema>
 export type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>
+
+// Niveau gamification partagé (points) — source unique pour
+// app/admin/points/page.tsx et app/api/admin/points/route.ts
+export type Level = 'Novice' | 'Intermediate' | 'Advanced' | 'Legend'

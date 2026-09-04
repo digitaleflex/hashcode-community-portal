@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { File, Upload, CheckCircle, Loader2, X } from 'lucide-react'
+import type { ColumnMapping } from '@/lib/import-excel'
 
 type ImportResult = {
   success: boolean
@@ -16,7 +17,7 @@ type PreviewData = {
   rows: Record<string, unknown>[]
 }
 
-const MAPPING_FIELDS: Array<{ key: 'email' | 'firstName' | 'lastName' | 'country' | 'status' | 'gender'; label: string }> = [
+const MAPPING_FIELDS: Array<{ key: keyof ColumnMapping; label: string }> = [
   { key: 'email', label: 'Email' },
   { key: 'firstName', label: 'Prénom' },
   { key: 'lastName', label: 'Nom' },
@@ -31,7 +32,7 @@ export default function AdminImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [preview, setPreview] = useState<PreviewData | null>(null)
-  const [mapping, setMapping] = useState<Record<string, string>>({})
+  const [mapping, setMapping] = useState<ColumnMapping>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,7 +77,7 @@ export default function AdminImportPage() {
       }
 
       // Auto-detect column mappings based on header names
-      const autoMapping: Record<string, string> = {}
+      const autoMapping: ColumnMapping = {}
       for (const field of MAPPING_FIELDS) {
         const candidates = {
           email: ['email', 'e-mail', 'courriel'],

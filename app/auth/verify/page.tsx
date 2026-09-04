@@ -60,12 +60,9 @@ export default function AuthVerify() {
       const data = await res.json()
 
       if (res.ok) {
-        if (data.exists) {
-          setMemberInfo({ firstName: data.firstName, lastName: data.lastName })
-          setVerifyState('found')
-        } else {
-          setVerifyState('not_found')
-        }
+        // 3.8: réponse uniforme — aucune distinction existant/inexistant.
+        // On enchaîne directement l'envoi générique (verify-email, déjà uniforme).
+        await handleSendCode()
       } else {
         setError(data.error || 'Erreur')
         setVerifyState('idle')
@@ -104,11 +101,11 @@ export default function AuthVerify() {
         }
       } else {
         setError(data.error || 'Erreur')
-        setVerifyState('found')
+        setVerifyState('idle')
       }
     } catch (err) {
       setError('Erreur réseau')
-      setVerifyState('found')
+      setVerifyState('idle')
     }
   }
 

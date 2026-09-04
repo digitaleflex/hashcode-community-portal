@@ -41,25 +41,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email invalide" }, { status: 400 });
     }
 
-    // ── LOOKUP ─────────────────────────────────────────
-    const member = await db
-      .select({
-        firstName: members.firstName,
-        lastName: members.lastName,
-      })
+    // ── 3.8: réponse uniforme — ne révèle pas l'existence du compte ──
+    // Lookup conservé (résultat ignoré) pour uniformiser le timing.
+    await db
+      .select({ id: members.id })
       .from(members)
       .where(eq(members.email, sanitizedEmail))
       .limit(1);
 
-    if (member.length > 0) {
-      return NextResponse.json({
-        exists: true,
-        firstName: member[0].firstName || null,
-        lastName: member[0].lastName || null,
-      });
-    }
-
-    return NextResponse.json({ exists: false });
+    return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("check-email error:", error);
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });

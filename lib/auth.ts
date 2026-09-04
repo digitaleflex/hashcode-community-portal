@@ -11,37 +11,13 @@ import { CreateMemberSchema, UpdateMemberSchema } from "./types";
 // Re-export crypto utilities for backward compatibility
 export { generateOTP, generateMagicToken, hashToken };
 
-// ── SECURITY: Validate JWT_SECRET lazily (avoid build-time crash) ─
-let _jwtSecret: Uint8Array | null = null;
-const getJwtSecretBytes = (): Uint8Array => {
-  if (!_jwtSecret) {
-    if (!process.env.JWT_SECRET) {
-      throw new Error(
-        "JWT_SECRET is required. Set it in .env.local or Vercel environment variables."
-      );
-    }
-    if (process.env.JWT_SECRET.length < 32) {
-      throw new Error("JWT_SECRET must be at least 32 characters long for security.");
-    }
-    _jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET);
-  }
-  return _jwtSecret;
-};
+import { JWT_SECRET, getJwtSecret } from "./edge-auth";
 
-// Proxy so existing `JWT_SECRET.xxx` usages work transparently at call-site
-const JWT_SECRET: Uint8Array = new Proxy(new Uint8Array(0), {
-  get(_t, prop) {
-    return Reflect.get(getJwtSecretBytes(), prop);
-  },
-});
+// Re-export Edge-safe JWT secret getter (source of truth lives in ./edge-auth)
+export { getJwtSecret };
 
 const SESSION_COOKIE = "hashcode_session";
 const SESSION_DURATION = 60 * 60 * 24 * 7; // 7 days
-
-// Export JWT secret getter for middleware (Edge runtime)
-export function getJwtSecret() {
-  return getJwtSecretBytes();
-}
 
 // ── RATE LIMITING ────────────────────────────────────────
 // Uses Upstash Redis in production, in-memory fallback for development

@@ -2,9 +2,8 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { members, communicationPreferences, communityHistory, memberProfiles } from '@/lib/db/schema';
-import { eq, count } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { requireAdmin } from '@/lib/auth';
-import { findMemberByEmail } from '@/lib/auth';
 import { parseImportFile, normalizeGender } from '@/lib/import-excel';
 import * as xlsx from 'xlsx';
 import { rateLimit } from '@/lib/rate-limit';
@@ -130,7 +129,19 @@ export async function POST(request: Request) {
 
     // Track which emails we've already processed (to handle duplicates within the import)
     const processedEmails = new Set<string>();
+    type PreparedRow = {
+      rowIndex: number;
+      email: string;
+      firstName: string;
+      lastName: string;
+      country: string | undefined;
+      status: string;
+      gender: string | null;
+      isNew: boolean;
+    };
+    const preparedRows: PreparedRow[] = [];
 
+    // ── PHASE 1 — Validate and prepare all rows ──────────
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const email = normalizeEmail(extractColumnValue(row, mapping, 'email', headers));
@@ -139,8 +150,6 @@ export async function POST(request: Request) {
         errors.push({ row: i + 2, message: `Ligne ${i + 2}: Email invalide` });
         continue;
       }
-
-      // Check for duplicates within this import batch
       if (processedEmails.has(email)) {
         errors.push({ row: i + 2, message: `Ligne ${i + 2}: Double-email en import` });
         continue;
@@ -152,101 +161,114 @@ export async function POST(request: Request) {
       const country = extractColumnValue(row, mapping, 'country', headers) || undefined;
       const rawStatus = extractColumnValue(row, mapping, 'status', headers) || 'imported';
       const rawGender = extractColumnValue(row, mapping, 'gender', headers);
-      const gender = normalizeGender(rawGender); // nullable — null means don't import
+      const gender = normalizeGender(rawGender);
 
       const statusValid = validateOptionalEnum(rawStatus, MEMBER_STATUSES, 'Statut');
       const status = statusValid.ok && statusValid.value ? statusValid.value : 'imported';
 
-      // Check if email already exists in DB
-      const existingMember = await findMemberByEmail(email);
+      preparedRows.push({ rowIndex: i + 2, email, firstName, lastName, country, status, gender, isNew: false });
+    }
 
-      if (existingMember) {
-        // Update existing member
+    // ── PHASE 2 — Batch check which emails already exist (1 query) ──
+    const allEmails = preparedRows.map((r) => r.email);
+    const existingEmailRows = await db
+      .select({ email: members.email })
+      .from(members)
+      .where(inArray(members.email, allEmails));
+    const existingEmailSet = new Set(existingEmailRows.map((r) => r.email));
+
+    for (const row of preparedRows) {
+      row.isNew = !existingEmailSet.has(row.email);
+    }
+
+    // ── PHASE 3 — Atomic insert/update inside a transaction ──
+    await db.transaction(async (tx) => {
+      // Process updates (existing members) one by one (fewer, no batching needed)
+      for (const row of preparedRows.filter((r) => !r.isNew)) {
         try {
-          const [updated] = await db
+          await tx
             .update(members)
             .set({
-              firstName: firstName || existingMember.firstName,
-              lastName: lastName || existingMember.lastName,
-              country: country || existingMember.country,
-              status: status,
-              gender: gender !== null ? gender : existingMember.gender, // only update if mapped
+              firstName: row.firstName || undefined,
+              lastName: row.lastName || undefined,
+              country: row.country,
+              status: row.status as "imported" | "claimed" | "verified" | "updated" | "active" | "inactive",
+              gender: (row.gender !== null ? row.gender : undefined) as "male" | "female" | "other" | "prefer_not_to_say" | undefined,
               updatedAt: new Date(),
             })
-            .where(eq(members.email, email))
-            .returning();
-
-          if (updated) {
-            updatedCount++;
-          }
+            .where(eq(members.email, row.email));
+          updatedCount++;
         } catch (e) {
-          console.error(`Import error updating row ${i + 2}:`, e);
-          errors.push({ row: i + 2, message: `Ligne ${i + 2}: Une erreur s'est produite` });
-        }
-      } else {
-        // Create new member
-        try {
-          const [newMember] = await db
-            .insert(members)
-            .values({
-              email,
-              firstName: firstName || undefined,
-              lastName: lastName || undefined,
-              country: country || undefined,
-              status: status,
-              gender: gender || undefined, // gender is optional (nullable field)
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            })
-            .returning();
-
-          if (newMember) {
-            createdCount++;
-
-            // Also insert member profile with basic data
-            await db.insert(memberProfiles).values({
-              memberId: newMember.id,
-              occupation: 'student',
-              bio: undefined,
-              linkedinUrl: undefined,
-              timeAvailable: null,
-              workPreference: undefined,
-            });
-
-            // NOTE: Poles should be assigned manually or via the admin poles interface.
-            // Auto-assignment based on country is not implemented to avoid incorrect mappings.
-
-            // Insert communication preferences
-            await db.insert(communicationPreferences).values({
-              memberId: newMember.id,
-              community: true,
-              security: false,
-              ai: false,
-              cloud: true,
-              training: false,
-              workshops: false,
-              opportunities: false,
-              projects: false,
-            });
-
-            // Insert community history
-            await db.insert(communityHistory).values({
-              memberId: newMember.id,
-              source: 'excel_import',
-              oldGroup: undefined,
-              oldActivity: undefined,
-              score: null,
-              languages: undefined,
-              metadata: JSON.stringify({ sourceFile: file.name, importedRow: i + 2 }),
-              createdAt: new Date(),
-            });
-          }
-        } catch (e) {
-          console.error(`Import error creating row ${i + 2}:`, e);
-          errors.push({ row: i + 2, message: `Ligne ${i + 2}: Une erreur s'est produite` });
+          console.error(`Import error updating row ${row.rowIndex}:`, e);
+          errors.push({ row: row.rowIndex, message: `Ligne ${row.rowIndex}: Erreur de mise à jour` });
         }
       }
-    }
+
+      // Process inserts (new members) in batches of 100
+      const newRows = preparedRows.filter((r) => r.isNew);
+      const BATCH_SIZE = 100;
+      for (let b = 0; b < newRows.length; b += BATCH_SIZE) {
+        const batch = newRows.slice(b, b + BATCH_SIZE);
+
+        try {
+          const memberValues = batch.map((row) => ({
+            email: row.email,
+            firstName: row.firstName || undefined,
+            lastName: row.lastName || undefined,
+            country: row.country,
+            status: row.status as "imported" | "claimed" | "verified" | "updated" | "active" | "inactive",
+            gender: (row.gender || undefined) as "other" | "male" | "female" | "prefer_not_to_say" | undefined,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }));
+
+          const insertedMembers = await tx.insert(members).values(memberValues).returning();
+
+          const profileValues = insertedMembers.map((m) => ({
+            memberId: m.id,
+            occupation: 'student' as const,
+          }));
+          if (profileValues.length > 0) {
+            await tx.insert(memberProfiles).values(profileValues);
+          }
+
+          const commPrefsValues = insertedMembers.map((m) => ({
+            memberId: m.id,
+            community: true,
+            security: false,
+            ai: false,
+            cloud: true,
+            training: false,
+            workshops: false,
+            opportunities: false,
+            projects: false,
+          }));
+          if (commPrefsValues.length > 0) {
+            await tx.insert(communicationPreferences).values(commPrefsValues);
+          }
+
+          const historyValues = insertedMembers.map((m, idx) => {
+            const row = batch[idx];
+            return {
+              memberId: m.id,
+              source: 'excel_import' as const,
+              metadata: JSON.stringify({ sourceFile: file.name, importedRow: row.rowIndex }),
+              createdAt: new Date(),
+            };
+          });
+          if (historyValues.length > 0) {
+            await tx.insert(communityHistory).values(historyValues);
+          }
+
+          createdCount += insertedMembers.length;
+        } catch (e) {
+          console.error(`Import error inserting batch ${Math.floor(b / BATCH_SIZE) + 1}:`, e);
+          for (const row of batch) {
+            errors.push({ row: row.rowIndex, message: `Ligne ${row.rowIndex}: Erreur d'insertion` });
+          }
+        }
+      }
+    });
 
     return NextResponse.json({
       success: true,

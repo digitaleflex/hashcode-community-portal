@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import {
   members,
@@ -20,6 +21,7 @@ import {
   validateEnum,
   validateGender,
   MEMBER_STATUSES,
+  OCCUPATIONS,
   GENDERS,
 } from '@/lib/server-validation';
 import { rateLimit } from '@/lib/rate-limit';
@@ -101,6 +103,24 @@ export async function GET(
 
 const ALLOWED_FIELDS = ['firstName', 'lastName', 'status', 'country', 'phone', 'city', 'age', 'gender'] as const;
 
+// Payload partiel : tous les champs sont optionnels, les clés inconnues sont
+// ignorées (strip, comme le whitelist via ALLOWED_FIELDS ci-dessous).
+// Ne vérifie que les types : les contraintes métier (longueurs, formats,
+// valeurs enum…) restent appliquées par les validateurs après le parse.
+const AdminMemberPatchSchema = z.object({
+  firstName: z.union([z.string(), z.null()]).optional(),
+  lastName: z.union([z.string(), z.null()]).optional(),
+  status: z.enum(MEMBER_STATUSES).optional(),
+  country: z.union([z.string(), z.null()]).optional(),
+  phone: z.union([z.string(), z.null()]).optional(),
+  city: z.union([z.string(), z.null()]).optional(),
+  age: z.union([z.string(), z.number(), z.null()]).optional(),
+  gender: z.union([z.enum(GENDERS), z.literal(''), z.null()]).optional(),
+  bio: z.union([z.string(), z.null()]).optional(),
+  linkedinUrl: z.union([z.string(), z.null()]).optional(),
+  occupation: z.union([z.enum(OCCUPATIONS), z.literal(''), z.null()]).optional(),
+});
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -120,12 +140,18 @@ export async function PATCH(
     return NextResponse.json({ error: 'Identifiant invalide' }, { status: 400 });
   }
 
-  let body: Record<string, unknown>;
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: 'JSON invalide' }, { status: 400 });
   }
+
+  const parsed = AdminMemberPatchSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Requête invalide' }, { status: 400 });
+  }
+  const body = parsed.data;
 
   const updates: Record<string, unknown> = {};
 

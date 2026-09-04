@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { members, memberProfiles, memberPoles, memberInterests, poles, interests, communicationPreferences } from "@/lib/db/schema";
 import { eq, and, inArray, or, ilike } from "drizzle-orm";
@@ -16,6 +17,7 @@ import {
   slugifyName,
   OCCUPATIONS,
   LEVELS,
+  GENDERS,
 } from "@/lib/server-validation";
 
 type PoleSelection = {
@@ -25,6 +27,32 @@ type PoleSelection = {
 };
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
+
+const PoleItemSchema = z.object({
+  slug: z.string(),
+  level: z.union([z.enum(LEVELS), z.literal(""), z.null()]).optional(),
+  isPrimary: z.unknown().optional(),
+});
+
+// Payload partiel : tous les champs sont optionnels, les clés inconnues sont
+// ignorées (strip, comme le whitelist manuel ci-dessous). Ne vérifie que les
+// types : les contraintes métier (longueurs, formats, valeurs enum…) restent
+// appliquées par les validateurs après le parse.
+const MePatchBodySchema = z.object({
+  firstName: z.union([z.string(), z.null()]).optional(),
+  lastName: z.union([z.string(), z.null()]).optional(),
+  country: z.union([z.string(), z.null()]).optional(),
+  city: z.union([z.string(), z.null()]).optional(),
+  phone: z.union([z.string(), z.null()]).optional(),
+  age: z.union([z.string(), z.number(), z.null()]).optional(),
+  gender: z.union([z.enum(GENDERS), z.literal(""), z.null()]).optional(),
+  occupation: z.union([z.enum(OCCUPATIONS), z.literal(""), z.null()]).optional(),
+  bio: z.union([z.string(), z.null()]).optional(),
+  linkedinUrl: z.union([z.string(), z.null()]).optional(),
+  poles: z.array(PoleItemSchema).optional(),
+  interests: z.array(z.string()).optional(),
+  communicationPrefs: z.record(z.string(), z.unknown()).optional(),
+});
 
 export async function GET() {
   const session = await getSession();
@@ -108,7 +136,9 @@ export async function PATCH(request: Request) {
       return bad("JSON invalide");
     }
     if (typeof body !== "object" || body === null) return bad("Requête invalide");
-    const data = body as Record<string, unknown>;
+    const parsed = MePatchBodySchema.safeParse(body);
+    if (!parsed.success) return bad("Requête invalide");
+    const data = parsed.data;
 
     // ── VALIDATE EVERYTHING BEFORE TOUCHING THE DATABASE ──
     const memberUpdates: Record<string, unknown> = {};

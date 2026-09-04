@@ -33,3 +33,8 @@ next-env.d.ts
 
 # Tests
 coverage/
+
+# Fichiers de données (jamais dans git — PII)
+*.xlsx
+*.xls
+*.csv

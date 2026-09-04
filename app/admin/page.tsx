@@ -7,9 +7,56 @@ import UserSidebar from '@/components/UserSidebar'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { genderLabel, genderColor } from '@/lib/display'
 
+interface MemberPole {
+  name: string
+  slug: string
+  level?: string | null
+  isPrimary?: boolean | null
+}
+
+interface MemberRow {
+  id: string
+  email: string
+  firstName?: string | null
+  lastName?: string | null
+  country?: string | null
+  status: string
+  gender?: string | null
+  createdAt?: string | null
+  poles?: MemberPole[] | null
+}
+
+interface PoleStat {
+  name: string
+  slug: string
+  count: number
+}
+
+interface DashboardStats {
+  total: number
+  imported: number
+  verified?: number
+  updated: number
+  active: number
+}
+
+interface DashboardPagination {
+  page: number
+  limit: number
+  total: number
+  pages: number
+}
+
+interface DashboardData {
+  stats: DashboardStats
+  poleStats: PoleStat[]
+  members: MemberRow[]
+  pagination: DashboardPagination
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -39,7 +86,7 @@ export default function AdminDashboard() {
     if (selectedMembers.length === data?.members?.length) {
       setSelectedMembers([])
     } else {
-      setSelectedMembers(data?.members?.map((m: any) => m.id) || [])
+      setSelectedMembers(data?.members?.map((m: MemberRow) => m.id) || [])
     }
   }
 
@@ -210,7 +257,7 @@ export default function AdminDashboard() {
     )
   }
 
-  const memberDetail = data?.members?.find((m: any) => m.id === selectedMember)
+  const memberDetail = data?.members?.find((m: MemberRow) => m.id === selectedMember)
 
   return (
     <div className="page-with-sidebar">
@@ -297,7 +344,7 @@ export default function AdminDashboard() {
             <div className="distribution-section">
               <h2>Distribution par pôles</h2>
               <div className="pole-stats">
-                {data.poleStats.map((p: any) => (
+                {data.poleStats.map((p: PoleStat) => (
                   <div key={p.slug} className="pole-stat-card">
                     <b>{p.count}</b>
                     <span>{p.name}</span>
@@ -456,7 +503,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.members?.map((m: any) => (
+                  {data?.members?.map((m: MemberRow) => (
                     <tr key={m.id} style={{ background: selectedMembers.includes(m.id) ? 'var(--primary-glow, #fef2f2)' : undefined }}>
                       <td>
                         <input
@@ -477,7 +524,7 @@ export default function AdminDashboard() {
                       </td>
                       <td>{m.country || '—'}</td>
                       <td>
-                        {m.poles?.map((p: any, i: number) => (
+                        {m.poles?.map((p: MemberPole, i: number) => (
                           <span key={i} className="pole-tag">{p.slug}</span>
                         ))}
                       </td>

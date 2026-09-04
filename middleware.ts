@@ -21,17 +21,7 @@ export async function middleware(request: NextRequest) {
     const memberId = payload.memberId as string
     const email = payload.email as string
 
-    // Admin routes require admin role — check DB
-    if (request.nextUrl.pathname.startsWith('/api/admin')) {
-      const { requireAdmin } = await import('@/lib/auth')
-      const db = (await import('@/lib/db')).db
-      const { members } = await import('@/lib/db/schema')
-      const { eq } = await import('drizzle-orm')
-      const member = await db.query.members.findFirst({ where: eq(members.id, memberId) })
-      if (!member || member.role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      }
-    }
+    // Admin authorization is enforced by requireAdmin() in /api/admin/* routes (source of truth).
 
     // Set headers for downstream routes
     const requestHeaders = new Headers(request.headers)

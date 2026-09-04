@@ -54,30 +54,32 @@ export async function GET(
       interestRows,
       commRows,
       historyRows,
-    ] = await Promise.all([
-      db.select().from(members).where(eq(members.id, id)).limit(1),
-      db.select().from(memberProfiles).where(eq(memberProfiles.memberId, id)).limit(1),
-      db
-        .select({ pole: poles, isPrimary: memberPoles.isPrimary, level: memberPoles.level })
-        .from(memberPoles)
-        .innerJoin(poles, eq(memberPoles.poleId, poles.id))
-        .where(eq(memberPoles.memberId, id)),
-      db
-        .select({ interest: interests })
-        .from(memberInterests)
-        .innerJoin(interests, eq(memberInterests.interestId, interests.id))
-        .where(eq(memberInterests.memberId, id)),
-      db
-        .select()
-        .from(communicationPreferences)
-        .where(eq(communicationPreferences.memberId, id))
-        .limit(1),
-      db
-        .select()
-        .from(communityHistory)
-        .where(eq(communityHistory.memberId, id))
-        .orderBy(asc(communityHistory.createdAt)),
-    ]);
+    ] = await db.transaction(async (tx) =>
+      Promise.all([
+        tx.select().from(members).where(eq(members.id, id)).limit(1),
+        tx.select().from(memberProfiles).where(eq(memberProfiles.memberId, id)).limit(1),
+        tx
+          .select({ pole: poles, isPrimary: memberPoles.isPrimary, level: memberPoles.level })
+          .from(memberPoles)
+          .innerJoin(poles, eq(memberPoles.poleId, poles.id))
+          .where(eq(memberPoles.memberId, id)),
+        tx
+          .select({ interest: interests })
+          .from(memberInterests)
+          .innerJoin(interests, eq(memberInterests.interestId, interests.id))
+          .where(eq(memberInterests.memberId, id)),
+        tx
+          .select()
+          .from(communicationPreferences)
+          .where(eq(communicationPreferences.memberId, id))
+          .limit(1),
+        tx
+          .select()
+          .from(communityHistory)
+          .where(eq(communityHistory.memberId, id))
+          .orderBy(asc(communityHistory.createdAt)),
+      ])
+    );
 
     if (memberRows.length === 0) {
       return NextResponse.json({ error: 'Membre non trouvé' }, { status: 404 });

@@ -37,6 +37,64 @@ import { toast } from '@/components/Toast'
 import { PrivacyBadge } from '@/lib/display'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 
+interface ProfileMember {
+  id?: string
+  email?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  age?: number | null
+  gender?: string | null
+  country?: string | null
+  city?: string | null
+  phone?: string | null
+  status?: string | null
+}
+
+interface ProfileDetails {
+  occupation?: string | null
+  bio?: string | null
+  linkedinUrl?: string | null
+}
+
+interface ProfilePole {
+  id: string
+  level: string
+  isPrimary?: boolean | null
+  pole: {
+    slug: string
+    id?: string
+    name?: string | null
+    description?: string | null
+  }
+}
+
+interface ProfileInterest {
+  id: string
+  name: string
+  slug?: string
+}
+
+interface ProfileCommPrefs {
+  id?: string
+  memberId?: string
+  community: boolean
+  security: boolean
+  ai: boolean
+  cloud: boolean
+  training: boolean
+  workshops: boolean
+  opportunities: boolean
+  projects: boolean
+}
+
+interface ProfileData {
+  member?: ProfileMember | null
+  profile?: ProfileDetails | null
+  poles?: ProfilePole[]
+  interests?: ProfileInterest[]
+  communicationPrefs?: ProfileCommPrefs | null
+}
+
 const GENDERS = [
   { id: '', label: 'Sélectionner' },
   { id: 'male', label: 'Masculin' },
@@ -51,7 +109,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<ProfileData | null>(null)
   const [editMode, setEditMode] = useState(false)
   const previousDataRef = useRef<typeof form | null>(null)
   const [form, setForm] = useState({
@@ -414,7 +472,7 @@ export default function ProfilePage() {
                 <div className="profile-section">
                   <h2><Shield size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Pôles ({poles.length})</h2>
                   <div className="pole-cards">
-                    {poles.map((p: any) => (
+                    {poles.map((p: ProfilePole) => (
                       <div key={p.id} className="pole-card">
                         <div className={`pole-card-icon ${p.pole.slug}`}>
                           {poleIcon(p.pole.slug)}
@@ -458,7 +516,7 @@ export default function ProfilePage() {
                 <div className="profile-section">
                   <h2><Globe size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Intérêts ({interests.length})</h2>
                   <div className="interest-tags">
-                    {interests.map((i: any) => (
+                    {interests.map((i: ProfileInterest) => (
                       <span key={i.id} className="interest-tag">{i.name}</span>
                     ))}
                   </div>
@@ -471,7 +529,7 @@ export default function ProfilePage() {
                   <h2><Mail size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} /> Préférences de communication</h2>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
                     {Object.entries(comms)
-                      .filter(([k, v]: [string, any]) => v === true && k !== 'id' && k !== 'memberId')
+                      .filter(([k, v]: [string, unknown]) => v === true && k !== 'id' && k !== 'memberId')
                       .map(([k]) => (
                         <div key={k} style={{
                           display: 'flex',

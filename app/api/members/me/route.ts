@@ -257,46 +257,74 @@ export async function PATCH(request: Request) {
       if (interestNames !== null) {
         await tx.delete(memberInterests).where(eq(memberInterests.memberId, session.memberId));
 
-        const insertedInterestIds: string[] = [];
+        if (interestNames.length > 0) {
+          const slugs = interestNames.map((name) => slugifyName(name));
 
-        for (const name of interestNames) {
-          const slug = slugifyName(name);
-          let [interest] = await tx
-            .select({ id: interests.id })
+          // Batch lookup : 1 seul SELECT (slug OU display name).
+          const existing = await tx
+            .select({ id: interests.id, slug: interests.slug, name: interests.name })
             .from(interests)
-            .where(or(eq(interests.slug, slug), ilike(interests.name, name)))
-            .limit(1);
+            .where(
+              or(
+                inArray(interests.slug, slugs),
+                ...interestNames.map((name) => ilike(interests.name, name))
+              )
+            );
 
-          if (!interest) {
-            const created = await tx
-              .insert(interests)
-              .values({ slug, name })
-              .onConflictDoNothing()
-              .returning({ id: interests.id });
-            if (created.length > 0) {
-              interest = created[0];
-            } else {
-              const [existing] = await tx
-                .select({ id: interests.id })
-                .from(interests)
-                .where(eq(interests.slug, slug))
-                .limit(1);
-              interest = existing;
+          const idBySlug = new Map(existing.map((r) => [r.slug, r.id]));
+          const idByLowerName = new Map(existing.map((r) => [r.name.toLowerCase(), r.id]));
+
+          // Intérêts manquants à créer (dédupés par slug, premier display name conservé).
+          const missingBySlug = new Map<string, string>();
+          for (let i = 0; i < interestNames.length; i++) {
+            const name = interestNames[i];
+            const slug = slugs[i];
+            if (!idBySlug.has(slug) && !idByLowerName.has(name.toLowerCase()) && !missingBySlug.has(slug)) {
+              missingBySlug.set(slug, name);
             }
           }
 
-          if (interest && !insertedInterestIds.includes(interest.id)) {
-            insertedInterestIds.push(interest.id);
-          }
-        }
+          // Batch insert des inconnus (conflits concurrents ignorés).
+          if (missingBySlug.size > 0) {
+            const created = await tx
+              .insert(interests)
+              .values([...missingBySlug].map(([slug, name]) => ({ slug, name })))
+              .onConflictDoNothing()
+              .returning({ id: interests.id, slug: interests.slug });
 
-        if (insertedInterestIds.length > 0) {
-          await tx.insert(memberInterests).values(
-            insertedInterestIds.map((interestId) => ({
-              memberId: session.memberId,
-              interestId,
-            }))
-          );
+            for (const row of created) {
+              idBySlug.set(row.slug, row.id);
+            }
+
+            // Concurrence : les lignes en conflit n'ont rien retourné → 1 seul re-fetch.
+            if (created.length < missingBySlug.size) {
+              const refetched = await tx
+                .select({ id: interests.id, slug: interests.slug })
+                .from(interests)
+                .where(inArray(interests.slug, [...missingBySlug.keys()]));
+              for (const row of refetched) {
+                if (!idBySlug.has(row.slug)) {
+                  idBySlug.set(row.slug, row.id);
+                }
+              }
+            }
+          }
+
+          // Dédup des ids puis 1 seul batch insert dans la jonction.
+          const seenIds = new Set<string>();
+          const values: { memberId: string; interestId: string }[] = [];
+          for (let i = 0; i < interestNames.length; i++) {
+            const name = interestNames[i];
+            const id = idBySlug.get(slugs[i]) ?? idByLowerName.get(name.toLowerCase());
+            if (id && !seenIds.has(id)) {
+              seenIds.add(id);
+              values.push({ memberId: session.memberId, interestId: id });
+            }
+          }
+
+          if (values.length > 0) {
+            await tx.insert(memberInterests).values(values);
+          }
         }
       }
 

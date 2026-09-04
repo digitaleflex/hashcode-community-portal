@@ -1,14 +1,15 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { members } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { authTokens, members } from "@/lib/db/schema";
+import { and, eq, lte, or } from "drizzle-orm";
 import {
   verifyMagicLinkToken,
   setSessionCookie,
   createSessionToken,
   rateLimit,
 } from "@/lib/auth";
+import { hashToken } from "@/lib/crypto";
 import { getClientIp } from "@/lib/request";
 
 export async function GET(request: Request) {
@@ -48,6 +49,28 @@ export async function GET(request: Request) {
         { status: 400 }
       );
     }
+
+    // ── AUDIT 3.2: single-use magic-link → hard-delete consumed + purge stale member tokens ──
+    const consumedTokenHash = hashToken(token);
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(authTokens)
+        .where(
+          and(
+            eq(authTokens.token, consumedTokenHash),
+            eq(authTokens.type, "magic_link")
+          )
+        );
+      await tx
+        .delete(authTokens)
+        .where(
+          and(
+            eq(authTokens.memberId, result.memberId),
+            eq(authTokens.type, "magic_link"),
+            or(eq(authTokens.used, true), lte(authTokens.expiresAt, new Date()))
+          )
+        );
+    });
 
     const member = await db
       .select()

@@ -264,6 +264,20 @@ export async function findMemberByEmail(email: string) {
 
 // ── ADMIN CHECK ───────────────────────────────────────────
 
+// Cache mémoire à TTL court pour éviter un lookup DB à chaque appel.
+// Clé = memberId, valeur = { isAdmin, expiresAt }.
+const ADMIN_CACHE_TTL_MS = 60 * 1000;
+type AdminCacheEntry = { isAdmin: boolean; expiresAt: number };
+const adminCache = new Map<string, AdminCacheEntry>();
+
+export function clearAdminCache(memberId?: string) {
+  if (memberId) {
+    adminCache.delete(memberId);
+  } else {
+    adminCache.clear();
+  }
+}
+
 export async function requireAdmin(): Promise<{
   error: NextResponse | null;
   session: { memberId: string; email: string } | null;
@@ -287,6 +301,22 @@ export async function requireAdmin(): Promise<{
     };
   }
 
+  // Check cache avant le lookup DB
+  const cached = adminCache.get(session.memberId);
+  if (cached) {
+    if (cached.expiresAt > Date.now()) {
+      if (cached.isAdmin) {
+        return { session, error: null, isAdmin: true };
+      }
+      return {
+        session,
+        error: NextResponse.json({ error: 'Accès admin requis' }, { status: 403 }),
+        isAdmin: false,
+      };
+    }
+    adminCache.delete(session.memberId);
+  }
+
   // Check DB for role
   const member = await db
     .select({ role: members.role })
@@ -295,6 +325,7 @@ export async function requireAdmin(): Promise<{
     .limit(1);
 
   if (member.length > 0 && member[0].role === 'admin') {
+    adminCache.set(session.memberId, { isAdmin: true, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
     return { session, error: null, isAdmin: true };
   }
 
@@ -303,9 +334,11 @@ export async function requireAdmin(): Promise<{
   const isBootstrapAdmin = adminEmail && session.email.toLowerCase() === adminEmail;
 
   if (isBootstrapAdmin) {
+    adminCache.set(session.memberId, { isAdmin: true, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
     return { session, error: null, isAdmin: true };
   }
 
+  adminCache.set(session.memberId, { isAdmin: false, expiresAt: Date.now() + ADMIN_CACHE_TTL_MS });
   return {
     session,
     error: NextResponse.json({ error: 'Accès admin requis' }, { status: 403 }),
